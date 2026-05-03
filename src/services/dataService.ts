@@ -18,7 +18,11 @@ export async function uploadForecast(file: File): Promise<any> {
     method: 'POST',
     body: formData,
   });
-  return response.json();
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Forecast upload failed');
+  }
+  return payload;
 }
 
 export async function uploadCV(file: File, employeeId: string): Promise<any> {
@@ -29,7 +33,11 @@ export async function uploadCV(file: File, employeeId: string): Promise<any> {
     method: 'POST',
     body: formData,
   });
-  return response.json();
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.error || 'CV upload failed');
+  }
+  return payload;
 }
 
 // Simplified parser for the provided CSV snapshot in the prompt

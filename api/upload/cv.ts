@@ -25,6 +25,11 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
+    if (!process.env.DATABASE_URL) {
+      json(res, 500, { error: "DATABASE_URL is not configured" });
+      return;
+    }
+
     const { fields, file } = await parseMultipart(req);
     if (!file) {
       json(res, 400, { error: "No file uploaded" });
@@ -38,6 +43,6 @@ export default async function handler(req: any, res: any) {
     json(res, 200, { success: true, message: "CV processed successfully" });
   } catch (error) {
     console.error(error);
-    json(res, 500, { error: "Failed to process CV" });
+    json(res, 500, { error: error instanceof Error ? error.message : "Failed to process CV" });
   }
 }
