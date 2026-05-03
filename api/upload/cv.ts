@@ -1,6 +1,12 @@
 import { ingestCV } from "../../src/services/ingestionService";
 import { parseMultipart } from "../_multipart";
 
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
 function json(res: any, status: number, data: unknown) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
