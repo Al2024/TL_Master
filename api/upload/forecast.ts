@@ -1,5 +1,5 @@
 import { ingestCSV } from "../_lib/ingestionService.js";
-import { parseMultipart } from "../_multipart";
+import { parseMultipart } from "../_multipart.js";
 
 export const config = {
   api: {
