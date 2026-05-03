@@ -4,8 +4,6 @@
  */
 
 import { parse } from "csv-parse/sync";
-import * as pdfImport from "pdf-parse";
-const pdf = (pdfImport as any).default || pdfImport;
 import mammoth from "mammoth";
 import { getDb } from "./db/index.js";
 import { assignments, weeklyAllocations, employees, skillVectors } from "./db/schema.js";
@@ -87,6 +85,8 @@ export async function ingestCV(buffer: Buffer, originalname: string, employeeId:
   let text = "";
 
   if (originalname.endsWith(".pdf")) {
+    const pdfImport = await import("pdf-parse");
+    const pdf = (pdfImport as any).default || pdfImport;
     const data = await pdf(buffer);
     text = data.text;
   } else if (originalname.endsWith(".docx") || originalname.endsWith(".doc")) {
