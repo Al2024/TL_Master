@@ -12,9 +12,9 @@ let dbInstance: any = null;
 let schemaInitialized = false;
 
 function getClient() {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = process.env.DATABASE_URL || process.env.TEAMLEADER_DATABASE_URL;
   if (!connectionString) {
-    throw new Error("DATABASE_URL environment variable is required for this operation.");
+    throw new Error("DATABASE_URL (or TEAMLEADER_DATABASE_URL) environment variable is required for this operation.");
   }
 
   if (!client) {
