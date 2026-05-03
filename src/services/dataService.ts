@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Assignment, ProjectType, UpdateType, WeeklyAllocation, Employee, BiasModel } from '../types';
+import { Assignment, BiasModel, UpdateType } from '../types';
 
 // Helper to extract data from the provide CSV structure
 // Since we are in a demo environment, I will use the provided data as a hardcoded source
@@ -53,141 +53,7 @@ export async function fetchAssignments(): Promise<Assignment[]> {
     console.warn("API fetch failed, falling back to mock data", error);
   }
 
-  const mockWeeks = [
-    "2026 09-Jan", "2026 16-Jan", "2026 23-Jan", "2026 30-Jan",
-    "2026 06-Feb", "2026 13-Feb", "2026 20-Feb", "2026 27-Feb",
-    "2026 06-Mar", "2026 13-Mar", "2026 20-Mar"
-  ];
-
-  // Fallback mock data logic
-  return [
-    {
-       id: "1",
-       employeeId: "000211358",
-       employeeName: "Alavian, Arash",
-       projectNumber: "IW300200",
-       projectName: "New Toowoomba Hospital",
-       projectType: ProjectType.BILLABLE,
-       projectManager: "MYERSON, NICOLE SARAH",
-       updateType: UpdateType.FORECAST,
-       discipline: "Design Architecture",
-       grade: "JP4",
-       totalHours: 1352,
-       weeklyAllocations: mockWeeks.map(w => ({ week: w, hours: 32 }))
-    },
-    {
-       id: "2",
-       employeeId: "000211358",
-       employeeName: "Alavian, Arash",
-       projectNumber: "IW300200",
-       projectName: "New Toowoomba Hospital",
-       projectType: ProjectType.BILLABLE,
-       projectManager: "MYERSON, NICOLE SARAH",
-       updateType: UpdateType.ACTUAL,
-       discipline: "Design Architecture",
-       grade: "JP4",
-       totalHours: 582,
-       weeklyAllocations: mockWeeks.map(w => ({ week: w, hours: 34 }))
-    },
-    {
-       id: "3",
-       employeeId: "000993818",
-       employeeName: "Alvarez Ospina, Gloria",
-       projectNumber: "IA251300",
-       projectName: "RPAH Stage 1",
-       projectType: ProjectType.BILLABLE,
-       projectManager: "GREENSTREET, PAUL MATHEW",
-       updateType: UpdateType.FORECAST,
-       discipline: "Design Architecture",
-       grade: "JP4",
-       totalHours: 3799,
-       weeklyAllocations: mockWeeks.map(w => ({ week: w, hours: 30 }))
-    },
-    {
-       id: "4",
-       employeeId: "000993818",
-       employeeName: "Alvarez Ospina, Gloria",
-       projectNumber: "IA251300",
-       projectName: "RPAH Stage 1",
-       projectType: ProjectType.BILLABLE,
-       projectManager: "GREENSTREET, PAUL MATHEW",
-       updateType: UpdateType.ACTUAL,
-       discipline: "Design Architecture",
-       grade: "JP4",
-       totalHours: 3515,
-       weeklyAllocations: mockWeeks.map(w => ({ week: w, hours: 32 }))
-    },
-    {
-       id: "5",
-       employeeId: "000881234",
-       employeeName: "Chen, Wei",
-       projectNumber: "P-20001",
-       projectName: "Sydney Metro West",
-       projectType: ProjectType.BILLABLE,
-       projectManager: "MYERSON, NICOLE SARAH",
-       updateType: UpdateType.FORECAST,
-       discipline: "Infrastructure",
-       grade: "SR2",
-       totalHours: 4200,
-       weeklyAllocations: mockWeeks.map(w => ({ week: w, hours: 38 }))
-    },
-    {
-       id: "6",
-       employeeId: "000772345",
-       employeeName: "Patel, Amara",
-       projectNumber: "P-10234",
-       projectName: "New Toowoomba Hospital",
-       projectType: ProjectType.BILLABLE,
-       projectManager: "MYERSON, NICOLE SARAH",
-       updateType: UpdateType.FORECAST,
-       discipline: "Engineering",
-       grade: "JP2",
-       totalHours: 3100,
-       weeklyAllocations: mockWeeks.map(w => ({ week: w, hours: 35 }))
-    },
-    {
-       id: "7",
-       employeeId: "000663456",
-       employeeName: "O'Connor, Liam",
-       projectNumber: "B-001",
-       projectName: "Internal Ops",
-       projectType: ProjectType.NON_BILLABLE,
-       projectManager: "ADMIN",
-       updateType: UpdateType.FORECAST,
-       discipline: "Management",
-       grade: "DIR",
-       totalHours: 1200,
-       weeklyAllocations: mockWeeks.map(w => ({ week: w, hours: 40 }))
-    },
-    {
-       id: "8",
-       employeeId: "000554567",
-       employeeName: "Smith, Julian",
-       projectNumber: "P-20002",
-       projectName: "Western Sydney Airport",
-       projectType: ProjectType.PROPOSAL,
-       projectManager: "GREENSTREET, PAUL MATHEW",
-       updateType: UpdateType.FORECAST,
-       discipline: "Planning",
-       grade: "SR1",
-       totalHours: 2500,
-       weeklyAllocations: mockWeeks.map((w, i) => ({ week: w, hours: i > 5 ? 0 : 20 }))
-    },
-    {
-       id: "9",
-       employeeId: "000445678",
-       employeeName: "Thompson, Sarah",
-       projectNumber: "IA251300",
-       projectName: "RPAH Stage 1",
-       projectType: ProjectType.BILLABLE,
-       projectManager: "GREENSTREET, PAUL MATHEW",
-       updateType: UpdateType.FORECAST,
-       discipline: "Design Architecture",
-       grade: "SR3",
-       totalHours: 4000,
-       weeklyAllocations: mockWeeks.map(w => ({ week: w, hours: 37 }))
-    }
-  ];
+  return [];
 }
 
 export function calculateBiasModels(assignments: Assignment[]): BiasModel[] {
