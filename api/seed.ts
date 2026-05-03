@@ -1,4 +1,4 @@
-import { getDb } from "./_lib/db/index";
+import { getDb } from "./_lib/db/index.js";
 
 function json(res: any, status: number, data: unknown) {
   res.statusCode = status;

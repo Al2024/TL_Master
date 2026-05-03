@@ -7,8 +7,8 @@ import { parse } from "csv-parse/sync";
 import * as pdfImport from "pdf-parse";
 const pdf = (pdfImport as any).default || pdfImport;
 import mammoth from "mammoth";
-import { getDb } from "./db/index";
-import { assignments, weeklyAllocations, employees, skillVectors } from "./db/schema";
+import { getDb } from "./db/index.js";
+import { assignments, weeklyAllocations, employees, skillVectors } from "./db/schema.js";
 
 const ProjectType = {
   BILLABLE: "B",

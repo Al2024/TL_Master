@@ -5,7 +5,7 @@
 
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import * as schema from "./schema";
+import * as schema from "./schema.js";
 
 let client: any = null;
 let dbInstance: any = null;

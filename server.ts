@@ -14,12 +14,12 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-import { getDb } from "./api/_lib/db/index";
-import { assignments as assignmentsTable, weeklyAllocations, employees } from "./api/_lib/db/schema";
+import { getDb } from "./api/_lib/db/index.js";
+import { assignments as assignmentsTable, weeklyAllocations, employees } from "./api/_lib/db/schema.js";
 import { eq } from "drizzle-orm";
 
 import multer from "multer";
-import { ingestCSV, ingestCV } from "./api/_lib/ingestionService";
+import { ingestCSV, ingestCV } from "./api/_lib/ingestionService.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
