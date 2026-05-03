@@ -32,6 +32,10 @@ export function getDb() {
   return dbInstance;
 }
 
+export function getSql() {
+  return getClient();
+}
+
 export async function ensureSchema() {
   if (schemaInitialized) return;
   const sqlClient = getClient();
