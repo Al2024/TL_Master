@@ -48,6 +48,8 @@ export default async function handler(req: any, res: any) {
     json(res, 200, { success: true, message: "Forecast data ingested successfully" });
   } catch (error) {
     console.error(error);
-    json(res, 500, { error: error instanceof Error ? error.message : "Failed to ingest CSV" });
+    json(res, 500, {
+      error: error instanceof Error ? error.message : "Failed to ingest CSV",
+    });
   }
 }

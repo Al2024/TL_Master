@@ -85,6 +85,7 @@ export async function ingestCSV(buffer: Buffer) {
         }
       }
     } catch (error) {
+      console.error("[ingestCSV] Record data", record);
       console.error("[ingestCSV] Failed to ingest record", {
         employeeId: id,
         projectNumber: record["ProjectNumber"],
