@@ -1,4 +1,4 @@
-import { ingestCSV } from "../../src/services/ingestionService";
+import { ingestCSV } from "../_lib/ingestionService";
 import { parseMultipart } from "../_multipart";
 
 export const config = {

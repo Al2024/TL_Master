@@ -1,4 +1,4 @@
-import { ingestCV } from "../../src/services/ingestionService";
+import { ingestCV } from "../_lib/ingestionService";
 import { parseMultipart } from "../_multipart";
 
 export const config = {
