@@ -29,54 +29,68 @@ export async function ingestCSV(buffer: Buffer) {
 
   for (const record of records) {
     const employeeInfo = record["Employee"] || "";
-    const [name, id] = employeeInfo.split(" : ").map((s: string) => s.trim());
+    const [rawName, rawId] = employeeInfo.split(" : ").map((s: string) => s.trim());
+    const id = rawId?.trim();
+    const name = rawName?.trim() || "Unknown";
 
-    if (!id) continue;
+    if (!id) {
+      console.warn("[ingestCSV] Skipping record with missing employee id", { employeeInfo });
+      continue;
+    }
 
-    await db
-      .insert(employees)
-      .values({
-        id: id,
-        name: name || "Unknown",
-        grade: record["Employee Grade"],
-        discipline: record["Discipline"],
-        office: record["Office"],
-      })
-      .onConflictDoUpdate({
-        target: employees.id,
-        set: { name, grade: record["Employee Grade"] },
-      });
+    try {
+      await db
+        .insert(employees)
+        .values({
+          id: id,
+          name: name,
+          grade: record["Employee Grade"],
+          discipline: record["Discipline"],
+          office: record["Office"],
+        })
+        .onConflictDoUpdate({
+          target: employees.id,
+          set: { name, grade: record["Employee Grade"] },
+        });
 
-    const typeStr = record["Type"]?.toLowerCase();
-    const updateType: UpdateTypeValue = typeStr === "actual" ? "actual" : "forecast";
+      const typeStr = record["Type"]?.toLowerCase();
+      const updateType: UpdateTypeValue = typeStr === "actual" ? "actual" : "forecast";
 
-    const projectType = (record["Project Type"] as ProjectTypeValue) || ProjectType.BILLABLE;
+      const projectType = (record["Project Type"] as ProjectTypeValue) || ProjectType.BILLABLE;
 
-    const [newAssignment] = await db
-      .insert(assignments)
-      .values({
-        employeeId: id,
-        projectNumber: record["ProjectNumber"],
-        projectName: record["ProjectName"],
-        projectType: projectType,
-        projectManager: record["Project Manager"],
-        updateType: updateType,
-        totalHours: parseFloat(record["Overall Total Project Hours"]?.replace(/,/g, "") || "0"),
-      })
-      .returning();
+      const [newAssignment] = await db
+        .insert(assignments)
+        .values({
+          employeeId: id,
+          projectNumber: record["ProjectNumber"],
+          projectName: record["ProjectName"],
+          projectType: projectType,
+          projectManager: record["Project Manager"],
+          updateType: updateType,
+          totalHours: parseFloat(record["Overall Total Project Hours"]?.replace(/,/g, "") || "0"),
+        })
+        .returning();
 
-    const weekRegex = /^\d{4} \d{2}-[A-Za-z]{3}$/;
-    for (const [key, value] of Object.entries(record)) {
-      if (weekRegex.test(key) && value) {
-        const hours = parseFloat((value as string).replace(/,/g, ""));
-        if (!isNaN(hours) && hours > 0) {
-          await db.insert(weeklyAllocations).values({
-            assignmentId: newAssignment.id,
-            week: key,
-            hours: hours,
-          });
+      const weekRegex = /^\d{4} \d{2}-[A-Za-z]{3}$/;
+      for (const [key, value] of Object.entries(record)) {
+        if (weekRegex.test(key) && value) {
+          const hours = parseFloat((value as string).replace(/,/g, ""));
+          if (!isNaN(hours) && hours > 0) {
+            await db.insert(weeklyAllocations).values({
+              assignmentId: newAssignment.id,
+              week: key,
+              hours: hours,
+            });
+          }
         }
       }
+    } catch (error) {
+      console.error("[ingestCSV] Failed to ingest record", {
+        employeeId: id,
+        projectNumber: record["ProjectNumber"],
+        error: error instanceof Error ? error.message : error,
+      });
+      throw error;
     }
   }
 }
