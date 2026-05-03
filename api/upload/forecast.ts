@@ -25,7 +25,8 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    if (!process.env.DATABASE_URL) {
+    const dbEnv = process.env.DATABASE_URL || process.env.TEAMLEADER_DATABASE_URL;
+    if (!dbEnv) {
       console.error("[upload/forecast] DATABASE_URL is not configured");
       json(res, 500, { error: "DATABASE_URL is not configured" });
       return;
