@@ -39,7 +39,7 @@ export async function ensureSchema() {
   await sqlClient`
     CREATE TABLE IF NOT EXISTS employees (
       id varchar(255) PRIMARY KEY,
-      name text NOT NULL,
+      name text NOT NULL DEFAULT '',
       grade varchar(50),
       discipline text,
       office text,
@@ -78,6 +78,20 @@ export async function ensureSchema() {
       bio text
     );
   `;
+
+  // Migration: add any columns that may be missing from older table versions
+  await sqlClient`ALTER TABLE employees ADD COLUMN IF NOT EXISTS name text NOT NULL DEFAULT ''`;
+  await sqlClient`ALTER TABLE employees ADD COLUMN IF NOT EXISTS grade varchar(50)`;
+  await sqlClient`ALTER TABLE employees ADD COLUMN IF NOT EXISTS discipline text`;
+  await sqlClient`ALTER TABLE employees ADD COLUMN IF NOT EXISTS office text`;
+  await sqlClient`ALTER TABLE employees ADD COLUMN IF NOT EXISTS normal_weekly_hours integer DEFAULT 40`;
+  await sqlClient`ALTER TABLE assignments ADD COLUMN IF NOT EXISTS project_number varchar(255)`;
+  await sqlClient`ALTER TABLE assignments ADD COLUMN IF NOT EXISTS project_name text`;
+  await sqlClient`ALTER TABLE assignments ADD COLUMN IF NOT EXISTS project_type varchar(1)`;
+  await sqlClient`ALTER TABLE assignments ADD COLUMN IF NOT EXISTS project_manager text`;
+  await sqlClient`ALTER TABLE assignments ADD COLUMN IF NOT EXISTS update_type varchar(50)`;
+  await sqlClient`ALTER TABLE assignments ADD COLUMN IF NOT EXISTS total_hours double precision`;
+  await sqlClient`ALTER TABLE assignments ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`;
 
   schemaInitialized = true;
 }
