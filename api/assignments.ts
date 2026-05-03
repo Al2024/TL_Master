@@ -1,4 +1,4 @@
-import { getDb } from "./_lib/db/index.js";
+import { ensureSchema, getDb } from "./_lib/db/index.js";
 
 function json(res: any, status: number, data: unknown) {
   res.statusCode = status;
@@ -13,6 +13,7 @@ export default async function handler(_req: any, res: any) {
       return;
     }
 
+    await ensureSchema();
     const db = getDb();
     const allAssignments = await db.query.assignments.findMany({
       with: { weeklyAllocations: true },

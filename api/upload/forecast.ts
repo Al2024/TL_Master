@@ -26,12 +26,14 @@ export default async function handler(req: any, res: any) {
 
   try {
     if (!process.env.DATABASE_URL) {
+      console.error("[upload/forecast] DATABASE_URL is not configured");
       json(res, 500, { error: "DATABASE_URL is not configured" });
       return;
     }
 
     const { file } = await parseMultipart(req);
     if (!file) {
+      console.error("[upload/forecast] no file received");
       json(res, 400, { error: "No file uploaded" });
       return;
     }

@@ -5,7 +5,7 @@
 
 import { parse } from "csv-parse/sync";
 import mammoth from "mammoth";
-import { getDb } from "./db/index.js";
+import { ensureSchema, getDb } from "./db/index.js";
 import { assignments, weeklyAllocations, employees, skillVectors } from "./db/schema.js";
 
 const ProjectType = {
@@ -19,6 +19,7 @@ type ProjectTypeValue = (typeof ProjectType)[keyof typeof ProjectType];
 type UpdateTypeValue = "actual" | "forecast";
 
 export async function ingestCSV(buffer: Buffer) {
+  await ensureSchema();
   const db = getDb();
   const records = parse(buffer, {
     columns: true,
@@ -81,6 +82,7 @@ export async function ingestCSV(buffer: Buffer) {
 }
 
 export async function ingestCV(buffer: Buffer, originalname: string, employeeId: string) {
+  await ensureSchema();
   const db = getDb();
   let text = "";
 

@@ -31,12 +31,14 @@ export default async function handler(req: any, res: any) {
 
   try {
     if (!process.env.DATABASE_URL) {
+      console.error("[upload/cv] DATABASE_URL is not configured");
       json(res, 500, { error: "DATABASE_URL is not configured" });
       return;
     }
 
     const { fields, file } = await parseMultipart(req);
     if (!file) {
+      console.error("[upload/cv] no file received");
       json(res, 400, { error: "No file uploaded" });
       return;
     }
