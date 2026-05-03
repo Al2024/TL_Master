@@ -19,6 +19,11 @@ function getField(fields: Record<string, string | string[]>, key: string) {
 }
 
 export default async function handler(req: any, res: any) {
+  console.info("[upload/cv] request", {
+    method: req.method,
+    contentType: req.headers?.["content-type"],
+  });
+
   if (req.method !== "POST") {
     json(res, 405, { error: "Method not allowed" });
     return;
@@ -35,6 +40,11 @@ export default async function handler(req: any, res: any) {
       json(res, 400, { error: "No file uploaded" });
       return;
     }
+
+    console.info("[upload/cv] file received", {
+      name: file.originalFilename,
+      size: file.buffer?.length,
+    });
 
     const employeeId = getField(fields, "employeeId") || "unknown";
     const original = file.originalFilename || "upload";

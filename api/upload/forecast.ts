@@ -14,6 +14,11 @@ function json(res: any, status: number, data: unknown) {
 }
 
 export default async function handler(req: any, res: any) {
+  console.info("[upload/forecast] request", {
+    method: req.method,
+    contentType: req.headers?.["content-type"],
+  });
+
   if (req.method !== "POST") {
     json(res, 405, { error: "Method not allowed" });
     return;
@@ -30,6 +35,11 @@ export default async function handler(req: any, res: any) {
       json(res, 400, { error: "No file uploaded" });
       return;
     }
+
+    console.info("[upload/forecast] file received", {
+      name: file.originalFilename,
+      size: file.buffer?.length,
+    });
 
     await ingestCSV(file.buffer);
     json(res, 200, { success: true, message: "Forecast data ingested successfully" });
