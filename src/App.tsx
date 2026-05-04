@@ -1,27 +1,20 @@
-/**
+﻿/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  BarChart3, 
-  Users, 
-  TrendingUp, 
-  AlertTriangle, 
-  MessageSquare, 
-  ChevronRight, 
-  Search,
-  Settings,
-  BrainCircuit,
-  Filter,
-  Upload,
-  FileText,
-  Database
+import {
+  BarChart3, Users, TrendingUp, AlertTriangle, BrainCircuit,
+  Upload, FileText, Database, Activity, Target, Clock, Zap,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import {
+  AreaChart, Area, LineChart, Line, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend,
+} from 'recharts';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
@@ -30,462 +23,702 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { fetchAssignments, calculateBiasModels, getAdjustedForecast, uploadForecast, uploadCV } from '@/src/services/dataService';
-import { calculateBillability, detectBurnoutRisk } from '@/src/lib/predictive';
 import { askStrategicArchitect } from '@/src/services/geminiService';
 import { Assignment, ProjectType, UpdateType, BiasModel } from '@/src/types';
 
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const parseWeekStr = (s: string): number => {
+  if (!s) return 0;
+  const [year, dayMonth] = s.split(' ');
+  if (!dayMonth) return 0;
+  const [day, mon] = dayMonth.split('-');
+  const d = new Date(`${mon} ${day}, ${year}`);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+};
+
+const fmt = (n: number, dec = 0) => n.toLocaleString('en-AU', { maximumFractionDigits: dec });
+const pct = (n: number) => `${n.toFixed(1)}%`;
+
+const COLORS = {
+  billable: '#10b981',   // emerald
+  proposal: '#f59e0b',   // amber
+  nonBillable: '#6366f1',// indigo
+  actual: '#38bdf8',     // sky
+  forecast: '#10b981',   // emerald
+  burnout: '#f43f5e',    // rose
+  bench: '#3b82f6',      // blue
+  capacity: '#334155',   // slate
+};
+
+const PROJECT_TYPE_COLORS: Record<string, string> = {
+  B: COLORS.billable,
+  P: COLORS.proposal,
+  N: COLORS.nonBillable,
+};
+
+// â”€â”€â”€ KPI Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function KpiCard({ label, value, sub, color = '#10b981', icon: Icon, trend }: {
+  label: string; value: string; sub?: string; color?: string; icon?: any; trend?: number;
+}) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 p-4 rounded-sm flex flex-col gap-2">
+      <div className="flex justify-between items-start">
+        <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest">{label}</span>
+        {Icon && <Icon size={14} color={color} />}
+      </div>
+      <div className="text-3xl font-bold font-mono" style={{ color }}>{value}</div>
+      <div className="flex items-center justify-between">
+        {sub && <span className="text-[9px] text-slate-500 font-mono">{sub}</span>}
+        {trend !== undefined && (
+          <span className={`text-[9px] font-mono ${trend >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {trend >= 0 ? 'â–²' : 'â–¼'} {Math.abs(trend).toFixed(1)}%
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// â”€â”€â”€ Custom Tooltip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-slate-900 border border-slate-700 p-3 rounded text-[10px] font-mono space-y-1">
+      <div className="text-slate-400 mb-1">{label}</div>
+      {payload.map((p: any) => (
+        <div key={p.name} style={{ color: p.color }}>
+          {p.name}: <span className="font-bold">{fmt(p.value, 0)}h</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// â”€â”€â”€ Main App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function App() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [biasModels, setBiasModels] = useState<BiasModel[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [winProbability, setWinProbability] = useState(100);
-  const [viewMode, setUpdateType] = useState<UpdateType>(UpdateType.FORECAST);
   const [isAdjusted, setIsAdjusted] = useState(false);
-  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'ai', text: string }[]>([]);
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
   const [inputText, setInputText] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('overview');
 
   const loadData = async () => {
+    setIsLoading(true);
     const data = await fetchAssignments();
     setAssignments(data);
-    setBiasModels(calculateBiasModels(data));
+    setIsLoading(false);
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   const handleForecastUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.[0]) return;
     setIsUploading(true);
+    setUploadMessage('Uploading forecast...');
     try {
       await uploadForecast(e.target.files[0]);
       await loadData();
+      setUploadMessage('Forecast data ingested successfully.');
     } catch (err) {
-      console.error(err);
-    } finally {
-      setIsUploading(false);
-    }
+      setUploadMessage(err instanceof Error ? err.message : 'Upload failed.');
+    } finally { setIsUploading(false); }
   };
 
   const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.[0]) return;
     setIsUploading(true);
+    setUploadMessage('Uploading CV...');
     try {
-      // For demo, we'll pick first employee ID if available
-      const empId = assignments[0]?.employeeId || "unknown";
+      const empId = assignments[0]?.employeeId || 'unknown';
       await uploadCV(e.target.files[0], empId);
+      setUploadMessage('CV uploaded successfully.');
     } catch (err) {
-      console.error(err);
-    } finally {
-      setIsUploading(false);
-    }
+      setUploadMessage(err instanceof Error ? err.message : 'CV upload failed.');
+    } finally { setIsUploading(false); }
   };
+
+  // â”€â”€ Derived Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const forecastRows = useMemo(() => assignments.filter(a => a.updateType === UpdateType.FORECAST), [assignments]);
+  const actualRows   = useMemo(() => assignments.filter(a => a.updateType === UpdateType.ACTUAL),   [assignments]);
+
+  const uniqueEmployees = useMemo(() => new Set(assignments.map(a => a.employeeId)), [assignments]);
+  const headcount = uniqueEmployees.size;
+  const weeklyCapacity = headcount * 40;
 
   const weekKeys = useMemo(() => {
     const keys = new Set<string>();
     assignments.forEach(a => a.weeklyAllocations.forEach(wa => keys.add(wa.week)));
-    
-    return Array.from(keys).sort((a, b) => {
-      const parse = (s: string) => {
-        if (!s) return 0;
-        // Standard "YYYY DD-MMM"
-        const parts = s.split(' ');
-        if (parts.length === 2) {
-          const [year, dayMonth] = parts;
-          const [day, month] = dayMonth.split('-');
-          if (day && month) {
-            const d = new Date(`${month} ${day}, ${year}`);
-            if (!isNaN(d.getTime())) return d.getTime();
-          }
-        }
-        // Fallback or "week X" format
-        if (s.includes('week')) {
-           const p = s.split(' ');
-           return parseInt(p[0]) * 1000 + parseInt(p[2]);
-        }
-        return 0;
-      };
-      return parse(a) - parse(b);
+    return Array.from(keys).sort((a, b) => parseWeekStr(a) - parseWeekStr(b));
+  }, [assignments]);
+
+  const todayMs = Date.now();
+  const currentWeekKey = useMemo(() => {
+    if (!weekKeys.length) return '';
+    let closest = weekKeys[0];
+    let minDiff = Infinity;
+    weekKeys.forEach(w => {
+      const diff = Math.abs(parseWeekStr(w) - todayMs);
+      if (diff < minDiff) { minDiff = diff; closest = w; }
     });
-  }, [assignments]);
+    return closest;
+  }, [weekKeys]);
 
-  const displayedAssignments = useMemo(() => {
-    let result = assignments.filter(a => a.updateType === (viewMode === UpdateType.ACTUAL ? UpdateType.ACTUAL : UpdateType.FORECAST));
-    
-    if (viewMode === UpdateType.FORECAST) {
-      if (isAdjusted) {
-        result = result.map(a => {
-          const bias = biasModels.find(bm => bm.pmName === a.projectManager)?.coefficient || 1.0;
-          return getAdjustedForecast(a, bias);
-        });
+  // Hours per week Ã— project type
+  const weeklyChartData = useMemo(() => {
+    return weekKeys.map(week => {
+      const label = week.split(' ')[1] || week;
+      let forecastBillable = 0, forecastProposal = 0, forecastNonBillable = 0;
+      let actualTotal = 0;
+      forecastRows.forEach(a => {
+        const h = a.weeklyAllocations.find(wa => wa.week === week)?.hours || 0;
+        if (a.projectType === ProjectType.BILLABLE) forecastBillable += h;
+        else if (a.projectType === ProjectType.PROPOSAL) forecastProposal += h;
+        else forecastNonBillable += h;
+      });
+      actualRows.forEach(a => {
+        actualTotal += a.weeklyAllocations.find(wa => wa.week === week)?.hours || 0;
+      });
+      const forecastTotal = forecastBillable + forecastProposal + forecastNonBillable;
+      return { week: label, forecastTotal, forecastBillable, forecastProposal, forecastNonBillable, actualTotal, capacity: weeklyCapacity };
+    });
+  }, [weekKeys, forecastRows, actualRows, weeklyCapacity]);
+
+  // Current week KPIs
+  const currentWeekData = useMemo(() => weeklyChartData.find(d => {
+    const label = currentWeekKey.split(' ')[1] || currentWeekKey;
+    return d.week === label;
+  }) || { forecastBillable: 0, forecastTotal: 0, actualTotal: 0, capacity: weeklyCapacity }, [weeklyChartData, currentWeekKey]);
+
+  const billabilityPct   = weeklyCapacity > 0 ? (currentWeekData.forecastBillable / weeklyCapacity) * 100 : 0;
+  const utilizationPct   = weeklyCapacity > 0 ? (currentWeekData.forecastTotal / weeklyCapacity) * 100 : 0;
+
+  // Forecast accuracy (weeks where we have both forecast AND actual hours)
+  const accuracyData = useMemo(() => {
+    const results: { week: string; accuracy: number; variance: number }[] = [];
+    weekKeys.forEach(week => {
+      const fTotal = forecastRows.reduce((s, a) => s + (a.weeklyAllocations.find(wa => wa.week === week)?.hours || 0), 0);
+      const aTotal = actualRows.reduce((s, a) => s + (a.weeklyAllocations.find(wa => wa.week === week)?.hours || 0), 0);
+      if (fTotal > 0 && aTotal > 0) {
+        results.push({ week: week.split(' ')[1] || week, accuracy: (aTotal / fTotal) * 100, variance: aTotal - fTotal });
       }
+    });
+    return results;
+  }, [weekKeys, forecastRows, actualRows]);
 
-      if (winProbability < 100) {
-        result = result.map(a => {
-          if (a.projectType === ProjectType.PROPOSAL) {
-            const prob = winProbability / 100;
-            return {
-              ...a,
-              totalHours: a.totalHours * prob,
-              weeklyAllocations: a.weeklyAllocations.map(wa => ({ ...wa, hours: wa.hours * prob }))
-            };
-          }
-          return a;
-        });
+  const avgAccuracy = accuracyData.length
+    ? accuracyData.reduce((s, d) => s + d.accuracy, 0) / accuracyData.length
+    : null;
+
+  // Bench risk: employees with < 8h forecast in next 2 upcoming weeks
+  const benchRiskEmployees = useMemo(() => {
+    const todayIdx = weekKeys.indexOf(currentWeekKey);
+    const nextWeeks = weekKeys.slice(todayIdx, todayIdx + 3);
+    const risks: string[] = [];
+    uniqueEmployees.forEach(empId => {
+      const empForecasts = forecastRows.filter(a => a.employeeId === empId);
+      const totalNext = nextWeeks.reduce((sum, week) =>
+        sum + empForecasts.reduce((s, a) => s + (a.weeklyAllocations.find(wa => wa.week === week)?.hours || 0), 0), 0);
+      if (totalNext < 8 * nextWeeks.length) risks.push(empId);
+    });
+    return risks;
+  }, [forecastRows, uniqueEmployees, weekKeys, currentWeekKey]);
+
+  // Burnout risk: employees with > 42h forecast in next 2 weeks
+  const burnoutRiskEmployees = useMemo(() => {
+    const todayIdx = weekKeys.indexOf(currentWeekKey);
+    const nextWeeks = weekKeys.slice(todayIdx, todayIdx + 3);
+    const risks: string[] = [];
+    uniqueEmployees.forEach(empId => {
+      const empForecasts = forecastRows.filter(a => a.employeeId === empId);
+      for (const week of nextWeeks) {
+        const weekTotal = empForecasts.reduce((s, a) => s + (a.weeklyAllocations.find(wa => wa.week === week)?.hours || 0), 0);
+        if (weekTotal > 42) { risks.push(empId); break; }
       }
-    }
-    
-    return result;
-  }, [assignments, viewMode, isAdjusted, winProbability, biasModels]);
+    });
+    return risks;
+  }, [forecastRows, uniqueEmployees, weekKeys, currentWeekKey]);
 
-  const billability = useMemo(() => {
-    return calculateBillability(displayedAssignments, weekKeys);
-  }, [displayedAssignments, weekKeys]);
+  // PM Bias
+  const biasModels = useMemo(() => calculateBiasModels(assignments), [assignments]);
+  const pmBias = useMemo(() => {
+    return biasModels
+      .filter(b => b.coefficient !== 1.0)
+      .sort((a, b) => Math.abs(b.coefficient - 1) - Math.abs(a.coefficient - 1))
+      .slice(0, 8);
+  }, [biasModels]);
 
-  const burnoutRisks = useMemo(() => {
-    return detectBurnoutRisk(assignments);
-  }, [assignments]);
+  // Project type mix (total hours)
+  const projectMix = useMemo(() => {
+    const totals: Record<string, number> = { B: 0, P: 0, N: 0 };
+    forecastRows.forEach(a => { totals[a.projectType] = (totals[a.projectType] || 0) + a.totalHours; });
+    const total = Object.values(totals).reduce((s, v) => s + v, 0);
+    return [
+      { name: 'Billable', value: totals.B, pct: total ? (totals.B / total) * 100 : 0 },
+      { name: 'Proposal', value: totals.P, pct: total ? (totals.P / total) * 100 : 0 },
+      { name: 'Non-Billable', value: totals.N, pct: total ? (totals.N / total) * 100 : 0 },
+    ];
+  }, [forecastRows]);
 
-  const currentBillability = billability[weekKeys[0]] || 0;
+  // Discipline utilization
+  const disciplineData = useMemo(() => {
+    const map: Record<string, number> = {};
+    forecastRows.forEach(a => {
+      if (!a.discipline) return;
+      const disc = a.discipline.split(':')[1]?.trim() || a.discipline;
+      map[disc] = (map[disc] || 0) + a.totalHours;
+    });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 8)
+      .map(([name, hours]) => ({ name, hours }));
+  }, [forecastRows]);
 
-  const billabilityData = useMemo(() => {
-    return weekKeys.map(week => ({
-      name: week.split('-')[1] || week,
-      value: billability[week] || 0
-    }));
-  }, [billability, weekKeys]);
+  // Employee utilization table (current + next 3 weeks)
+  const todayIdx = weekKeys.indexOf(currentWeekKey);
+  const heatmapWeeks = weekKeys.slice(Math.max(0, todayIdx - 2), todayIdx + 10);
+
+  const employeeRows = useMemo(() => {
+    const empMap: Record<string, { name: string; grade: string; discipline: string }> = {};
+    assignments.forEach(a => {
+      if (!empMap[a.employeeId]) empMap[a.employeeId] = { name: a.employeeName, grade: a.grade, discipline: a.discipline };
+    });
+    return Object.entries(empMap).map(([id, info]) => {
+      const empForecasts = forecastRows.filter(a => a.employeeId === id);
+      const empActuals   = actualRows.filter(a => a.employeeId === id);
+      const weekHours = heatmapWeeks.map(week => {
+        const fH = empForecasts.reduce((s, a) => s + (a.weeklyAllocations.find(wa => wa.week === week)?.hours || 0), 0);
+        const aH = empActuals.reduce((s, a) => s + (a.weeklyAllocations.find(wa => wa.week === week)?.hours || 0), 0);
+        return { forecast: fH, actual: aH };
+      });
+      return { id, ...info, weekHours, isBurnout: burnoutRiskEmployees.includes(id), isBench: benchRiskEmployees.includes(id) };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [assignments, forecastRows, actualRows, heatmapWeeks, burnoutRiskEmployees, benchRiskEmployees]);
 
   const handleSendMessage = async () => {
-    
+    if (!inputText.trim()) return;
     const userMsg = inputText;
     setInputText('');
     setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setIsThinking(true);
-
     const context = {
-      billability: currentBillability,
+      billability: billabilityPct,
       tasks: assignments.length,
-      risks: burnoutRisks.length,
-      winProb: winProbability
+      headcount,
+      risks: burnoutRiskEmployees.length,
+      bench: benchRiskEmployees.length,
+      forecastAccuracy: avgAccuracy,
+      winProb: winProbability,
     };
-
     const response = await askStrategicArchitect(userMsg, context);
     setChatMessages(prev => [...prev, { role: 'ai', text: response }]);
     setIsThinking(false);
   };
 
+  // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden" id="main-layout">
-      {/* Sidebar Navigation */}
-      <aside className="w-14 flex flex-col items-center py-6 bg-slate-950 border-r border-slate-800 space-y-8" id="sidebar">
-        <div className="p-2 bg-slate-800 rounded text-emerald-500">
-          <BrainCircuit size={20} />
-        </div>
+    <div className="flex h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden">
+      {/* Sidebar */}
+      <aside className="w-14 flex flex-col items-center py-6 bg-slate-950 border-r border-slate-800 space-y-8">
+        <div className="p-2 bg-slate-800 rounded text-emerald-500"><BrainCircuit size={20} /></div>
         <nav className="flex flex-col space-y-4">
-          <Button variant="ghost" size="icon" className="text-slate-500 hover:text-emerald-500 hover:bg-slate-900"><BarChart3 size={20}/></Button>
-          <Button variant="ghost" size="icon" className="text-slate-500 hover:text-emerald-500 hover:bg-slate-900"><Users size={20}/></Button>
-          <Button variant="ghost" size="icon" className="text-slate-500 hover:text-emerald-500 hover:bg-slate-900"><Settings size={20}/></Button>
+          <Button variant="ghost" size="icon" className="text-slate-500 hover:text-emerald-500 hover:bg-slate-900" onClick={() => setActiveTab('overview')}><BarChart3 size={20} /></Button>
+          <Button variant="ghost" size="icon" className="text-slate-500 hover:text-emerald-500 hover:bg-slate-900" onClick={() => setActiveTab('grid')}><Users size={20} /></Button>
+          <Button variant="ghost" size="icon" className="text-slate-500 hover:text-emerald-500 hover:bg-slate-900" onClick={() => setActiveTab('intelligence')}><Activity size={20} /></Button>
         </nav>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-slate-950">
-        {/* Header / Branding */}
-        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50 shrink-0">
+      {/* Main */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="h-14 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50 shrink-0">
           <div className="flex items-center gap-4">
             <div className="w-8 h-8 bg-emerald-500 flex items-center justify-center font-bold text-slate-950 text-xl">TL</div>
-            <h1 className="text-lg font-semibold tracking-tight uppercase">TL MASTER <span className="text-emerald-500 font-mono text-xs ml-2">INTELLIGENCE v2.5</span></h1>
+            <h1 className="text-base font-semibold tracking-tight uppercase">
+              TL MASTER <span className="text-emerald-500 font-mono text-[10px] ml-2">INTELLIGENCE v2.5</span>
+            </h1>
           </div>
-          <div className="hidden md:flex gap-8 text-[10px] font-mono">
-            <div className="flex flex-col">
+          <div className="flex items-center gap-6 text-[10px] font-mono">
+            <div className="flex flex-col items-end">
               <span className="text-slate-500 uppercase">System Status</span>
-              <span className="text-emerald-400 font-bold">LIVE PREDICTIVE ENGINE</span>
+              <span className={`font-bold ${isLoading ? 'text-amber-400' : 'text-emerald-400'}`}>
+                {isLoading ? 'LOADING...' : 'LIVE PREDICTIVE ENGINE'}
+              </span>
             </div>
-             <div className="flex flex-col">
-                <Dialog>
-                  <DialogTrigger
-                    render={
-                      <Button variant="ghost" size="sm" className="h-full p-0 flex flex-col items-start hover:bg-transparent">
-                        <span className="text-slate-500 uppercase">Data Pipeline</span>
-                        <span className="text-emerald-400 font-bold flex items-center"><Upload size={10} className="mr-1"/> INGEST DATA</span>
-                      </Button>
-                    }
-                  />
-                  <DialogContent className="bg-slate-900 border-slate-800 text-slate-200 font-mono">
-                   <DialogHeader>
-                     <DialogTitle className="text-emerald-500 uppercase tracking-widest text-sm">Data Ingestion Engine</DialogTitle>
-                   </DialogHeader>
-                   <div className="space-y-6 py-4">
-                     <div className="space-y-2">
-                       <p className="text-[10px] text-slate-400 uppercase">Structured Data (CSV Forecasting)</p>
-                       <label className="flex items-center justify-center w-full h-24 border-2 border-dashed border-slate-700 rounded-lg hover:border-emerald-500/50 cursor-pointer transition-colors bg-slate-950/50">
-                         <div className="flex flex-col items-center">
-                           <Database className="mb-2 text-slate-500" size={20}/>
-                           <span className="text-[10px] uppercase text-slate-500 group-hover:text-slate-300">Drop Forecasting CSV</span>
-                         </div>
-                         <input type="file" className="hidden" accept=".csv" onChange={handleForecastUpload} />
-                       </label>
-                     </div>
-                     <div className="space-y-2">
-                       <p className="text-[10px] text-slate-400 uppercase">Unstructured Data (PDF/Word CVs)</p>
-                       <label className="flex items-center justify-center w-full h-24 border-2 border-dashed border-slate-700 rounded-lg hover:border-emerald-500/50 cursor-pointer transition-colors bg-slate-950/50">
-                         <div className="flex flex-col items-center">
-                           <FileText className="mb-2 text-slate-500" size={20}/>
-                           <span className="text-[10px] uppercase text-slate-500">Upload Team Profiles</span>
-                         </div>
-                         <input type="file" className="hidden" accept=".pdf,.doc,.docx" onChange={handleCVUpload} />
-                       </label>
-                     </div>
-                     {isUploading && <p className="text-[10px] text-emerald-400 animate-pulse uppercase">Processing data packets...</p>}
-                   </div>
-                 </DialogContent>
-               </Dialog>
-            </div>
+            <Dialog>
+              <DialogTrigger render={
+                <Button variant="ghost" size="sm" className="h-8 px-3 border border-slate-700 text-emerald-400 font-mono text-[10px] hover:bg-slate-800">
+                  <Upload size={12} className="mr-1" /> INGEST DATA
+                </Button>
+              } />
+              <DialogContent className="bg-slate-900 border-slate-800 text-slate-200 font-mono">
+                <DialogHeader>
+                  <DialogTitle className="text-emerald-500 uppercase tracking-widest text-sm">Data Ingestion Engine</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-5 py-4">
+                  <div>
+                    <p className="text-[10px] text-slate-400 uppercase mb-2">Structured Data (CSV Forecasting)</p>
+                    <label className="flex items-center justify-center w-full h-20 border-2 border-dashed border-slate-700 rounded-lg hover:border-emerald-500/50 cursor-pointer transition-colors">
+                      <div className="flex flex-col items-center"><Database className="mb-1 text-slate-500" size={18} /><span className="text-[10px] uppercase text-slate-500">Drop Forecasting CSV</span></div>
+                      <input type="file" className="hidden" accept=".csv" onChange={handleForecastUpload} />
+                    </label>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400 uppercase mb-2">Unstructured Data (PDF/Word CVs)</p>
+                    <label className="flex items-center justify-center w-full h-20 border-2 border-dashed border-slate-700 rounded-lg hover:border-emerald-500/50 cursor-pointer transition-colors">
+                      <div className="flex flex-col items-center"><FileText className="mb-1 text-slate-500" size={18} /><span className="text-[10px] uppercase text-slate-500">Upload Team Profiles</span></div>
+                      <input type="file" className="hidden" accept=".pdf,.doc,.docx" onChange={handleCVUpload} />
+                    </label>
+                  </div>
+                  {isUploading && <p className="text-[10px] text-emerald-400 animate-pulse uppercase">Processing...</p>}
+                  {uploadMessage && !isUploading && <p className="text-[10px] text-slate-300">{uploadMessage}</p>}
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </header>
 
-        {/* Zone A: The Pulse */}
-        <section className="p-6 grid grid-cols-1 md:grid-cols-4 gap-4 border-b border-slate-800 bg-slate-900/20 shrink-0">
-          {/* Billability Card */}
-          <div className="col-span-1 bg-slate-900 border border-slate-800 p-5 flex flex-col items-center justify-center relative rounded-sm" id="pulse-billability">
-            <div className="absolute top-2 left-2 text-[8px] font-mono text-slate-500 uppercase">Billability_Current</div>
-            <div className="text-4xl font-bold text-emerald-500 font-mono">{currentBillability.toFixed(0)}%</div>
-            <div className="w-full h-1 bg-slate-800 mt-4 rounded-full overflow-hidden">
-              <motion.div 
-                className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" 
-                initial={{ width: 0 }}
-                animate={{ width: `${currentBillability}%` }}
-              />
-            </div>
-            <div className="mt-4 h-[40px] w-full opacity-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={billabilityData}>
-                  <defs>
-                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <Area type="monotone" dataKey="value" stroke="#10b981" fillOpacity={1} fill="url(#colorValue)" />
-                </AreaChart>
-              </ResponsiveContainer>
-           </div>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+          <div className="border-b border-slate-800 px-6 bg-slate-900/30 shrink-0">
+            <TabsList className="h-10 bg-transparent gap-1 p-0">
+              {[['overview','Overview'], ['grid','Resource Grid'], ['intelligence','Intelligence']].map(([v, l]) => (
+                <TabsTrigger key={v} value={v} className="h-10 rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-500 data-[state=active]:text-emerald-400 text-slate-500 text-[11px] uppercase font-mono tracking-wider px-4 bg-transparent">
+                  {l}
+                </TabsTrigger>
+              ))}
+            </TabsList>
           </div>
 
-          {/* Forecasting Gap Card */}
-          <div className="col-span-1 md:col-span-2 bg-slate-900 border border-slate-800 p-5 flex flex-col justify-center rounded-sm" id="pulse-risks">
-            <div className="text-[10px] font-mono text-slate-500 mb-1 uppercase tracking-widest">Predictive_Forecast_Gap</div>
-            <div className="flex items-baseline gap-3">
-              <span className="text-3xl font-bold text-rose-400">-{ (85 - currentBillability).toFixed(0) }% Drop</span>
-              <span className="text-xs text-slate-400 mb-1">Projected relative to 85% target</span>
+          {/* â”€â”€ OVERVIEW TAB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          <TabsContent value="overview" className="flex-1 overflow-auto p-6 space-y-6 mt-0">
+            {/* KPI Row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <KpiCard label="Billability (This Week)" value={pct(billabilityPct)} sub={`Target: 85% | Cap: ${fmt(weeklyCapacity)}h`} color={billabilityPct >= 85 ? COLORS.billable : billabilityPct >= 60 ? '#f59e0b' : '#f43f5e'} icon={Target} />
+              <KpiCard label="Utilization (This Week)" value={pct(utilizationPct)} sub={`${fmt(currentWeekData.forecastTotal)}h of ${fmt(weeklyCapacity)}h capacity`} color={COLORS.billable} icon={TrendingUp} />
+              <KpiCard label="Forecast Accuracy" value={avgAccuracy != null ? pct(avgAccuracy) : 'N/A'} sub={`${accuracyData.length} weeks w/ actuals`} color={avgAccuracy != null && avgAccuracy > 90 ? COLORS.billable : '#f59e0b'} icon={Zap} />
+              <KpiCard label="Alerts" value={`${burnoutRiskEmployees.length + benchRiskEmployees.length}`} sub={`${burnoutRiskEmployees.length} burnout Â· ${benchRiskEmployees.length} bench risk`} color={burnoutRiskEmployees.length + benchRiskEmployees.length > 0 ? COLORS.burnout : COLORS.billable} icon={AlertTriangle} />
             </div>
-            <div className="text-[10px] text-slate-500 mt-2 font-mono uppercase">
-              Primary Risks: {burnoutRisks.length} Over-Forecasted Units Detected.
+
+            {/* Forecast vs Actual Chart + Project Mix */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Main weekly chart */}
+              <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-sm p-5">
+                <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-4">Weekly Hours â€” Forecast vs Actual</div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={weeklyChartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="week" tick={{ fontSize: 9, fill: '#64748b', fontFamily: 'monospace' }} interval="preserveStartEnd" />
+                    <YAxis tick={{ fontSize: 9, fill: '#64748b', fontFamily: 'monospace' }} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: '9px', fontFamily: 'monospace', textTransform: 'uppercase', color: '#64748b' }} />
+                    <Line type="monotone" dataKey="forecastBillable" name="Billable Forecast" stroke={COLORS.billable} strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="forecastProposal" name="Proposal Forecast" stroke={COLORS.proposal} strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+                    <Line type="monotone" dataKey="actualTotal" name="Actuals" stroke={COLORS.actual} strokeWidth={2} dot={false} strokeDasharray="2 2" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Project Mix Donut */}
+              <div className="bg-slate-900 border border-slate-800 rounded-sm p-5">
+                <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-4">Project Mix (Total Forecast Hours)</div>
+                <ResponsiveContainer width="100%" height={150}>
+                  <PieChart>
+                    <Pie data={projectMix} cx="50%" cy="50%" innerRadius={45} outerRadius={65} dataKey="value" paddingAngle={3}>
+                      {projectMix.map((entry, i) => (
+                        <Cell key={i} fill={[COLORS.billable, COLORS.proposal, COLORS.nonBillable][i]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v: any) => `${fmt(v)}h`} contentStyle={{ background: '#0f172a', border: '1px solid #334155', fontSize: '10px', fontFamily: 'monospace' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-2 mt-2">
+                  {projectMix.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between text-[10px] font-mono">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-sm" style={{ background: [COLORS.billable, COLORS.proposal, COLORS.nonBillable][i] }} />
+                        <span className="text-slate-400">{p.name}</span>
+                      </div>
+                      <span className="text-slate-200 font-bold">{pct(p.pct)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
 
-          {/* What-If Slider */}
-          <div className="col-span-1 bg-slate-900 border border-slate-800 p-5 rounded-sm" id="pulse-whatif">
-            <div className="text-[10px] font-mono text-slate-500 mb-3 uppercase tracking-widest font-bold">What-If_Proposal_Weight</div>
-            <div className="px-1">
-              <Slider 
-                value={[winProbability]} 
-                onValueChange={(v) => setWinProbability(v[0])} 
-                max={100} 
-                step={10}
-                className="accent-emerald-500"
-              />
+            {/* Forecast Accuracy trend + What-If */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-sm p-5">
+                <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-4">Forecast Accuracy by Week (Actual / Forecast %)</div>
+                {accuracyData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={160}>
+                    <BarChart data={accuracyData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis dataKey="week" tick={{ fontSize: 9, fill: '#64748b', fontFamily: 'monospace' }} />
+                      <YAxis domain={[0, 150]} tick={{ fontSize: 9, fill: '#64748b', fontFamily: 'monospace' }} unit="%" />
+                      <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', fontSize: '10px', fontFamily: 'monospace' }} formatter={(v: any) => `${v.toFixed(1)}%`} />
+                      <Bar dataKey="accuracy" name="Accuracy %" radius={[2, 2, 0, 0]}>
+                        {accuracyData.map((d, i) => (
+                          <Cell key={i} fill={d.accuracy > 100 ? COLORS.burnout : d.accuracy > 85 ? COLORS.billable : COLORS.proposal} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-40 text-slate-600 text-xs font-mono">No actuals data yet â€” upload actuals to see accuracy</div>
+                )}
+              </div>
+
+              {/* What-If Panel */}
+              <div className="bg-slate-900 border border-slate-800 rounded-sm p-5 flex flex-col justify-between">
+                <div>
+                  <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">What-If: Proposal Win Rate</div>
+                  <div className="text-[9px] text-slate-600 font-mono mb-4">Scales proposal hours by probability</div>
+                  <div className="px-1 mb-3">
+                    <Slider value={[winProbability]} onValueChange={v => setWinProbability(Array.isArray(v) ? v[0] : v)} max={100} step={10} />
+                  </div>
+                  <div className="flex justify-between text-[9px] mt-2 font-mono text-slate-500 uppercase">
+                    <span>Conservative</span>
+                    <span className="text-emerald-400 font-bold text-sm">{winProbability}%</span>
+                    <span>Aggressive</span>
+                  </div>
+                </div>
+                <div className="mt-4 pt-4 border-t border-slate-800 space-y-2">
+                  <div className="flex justify-between text-[10px] font-mono">
+                    <span className="text-slate-500">Adjusted Proposal Hours</span>
+                    <span className="text-amber-400 font-bold">{fmt(projectMix.find(p => p.name === 'Proposal')?.value || 0 * winProbability / 100)}h</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] font-mono">
+                    <span className="text-slate-500">Total Adjusted Forecast</span>
+                    <span className="text-emerald-400 font-bold">{fmt(forecastRows.reduce((s, a) => s + a.totalHours, 0))}h</span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-between text-[8px] mt-3 font-mono text-slate-500 uppercase tracking-tighter">
-              <span>Conservative</span>
-              <span className="text-emerald-400 font-bold">{winProbability}%</span>
-              <span>Aggressive</span>
+          </TabsContent>
+
+          {/* â”€â”€ RESOURCE GRID TAB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          <TabsContent value="grid" className="flex-1 overflow-hidden flex flex-col p-6 mt-0">
+            <div className="flex justify-between items-center mb-4 shrink-0">
+              <div>
+                <h3 className="text-xs font-mono text-slate-400 uppercase tracking-widest">Resource Utilization Grid</h3>
+                <p className="text-[9px] text-slate-600 font-mono mt-0.5">Showing {heatmapWeeks.length} weeks Â· Colors = forecast hours Â· â—† = actual available</p>
+              </div>
+              <div className="flex items-center gap-4 text-[9px] font-mono">
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-sm bg-emerald-500" /> Billable (20-38h)</div>
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-sm bg-rose-500" /> Burnout (&gt;42h)</div>
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-sm bg-blue-500" /> Bench (&lt;8h)</div>
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-sm bg-slate-800" /> Unallocated</div>
+              </div>
             </div>
-          </div>
-        </section>
-
-        {/* Zone B: The Grid */}
-        <section className="flex-1 p-6 overflow-hidden flex flex-col">
-          <div className="flex justify-between items-center mb-4 shrink-0">
-            <h3 className="text-xs font-mono text-slate-400 uppercase tracking-[0.2em]">Resource Utilization Heatmap</h3>
-            <div className="flex gap-1">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className={`h-7 px-3 text-[10px] uppercase font-mono border rounded-none ${viewMode === UpdateType.FORECAST && !isAdjusted ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'}`}
-                onClick={() => { setUpdateType(UpdateType.FORECAST); setIsAdjusted(false); }}
-              >
-                System Forecast
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className={`h-7 px-3 text-[10px] uppercase font-mono border rounded-none ${isAdjusted ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'}`}
-                onClick={() => { setUpdateType(UpdateType.FORECAST); setIsAdjusted(true); }}
-              >
-                Model Adjusted
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className={`h-7 px-3 text-[10px] uppercase font-mono border rounded-none ${viewMode === UpdateType.ACTUAL ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'}`}
-                onClick={() => { setUpdateType(UpdateType.ACTUAL); setIsAdjusted(false); }}
-              >
-                Actuals
-              </Button>
-            </div>
-          </div>
-
-          <div className="flex-1 border border-slate-800 bg-slate-900/10 overflow-hidden relative rounded-sm">
-            <ScrollArea className="h-full">
-              <Table>
-                <TableHeader className="sticky top-0 bg-slate-950/90 backdrop-blur-md z-10">
-                  <TableRow className="border-b border-slate-800 hover:bg-transparent">
-                    <TableHead className="w-[200px] font-mono text-[10px] uppercase border-r border-slate-800 text-slate-500">Resource / Grade</TableHead>
-                    {weekKeys.map(week => {
-                      const display = week.includes('week') 
-                        ? 'W' + week.split(' ')[2] 
-                        : (week.split(' ')[1] || '').replace('-', '');
-                      return (
-                        <TableHead key={week} className="text-center font-mono text-[10px] min-w-[70px] border-r border-slate-800 text-slate-500">
-                          {display || week}
-                        </TableHead>
-                      );
-                    })}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {displayedAssignments.map((a, i) => (
-                    <TableRow key={a.id} className="border-b border-slate-800 group hover:bg-slate-900/40">
-                      <TableCell className="border-r border-slate-800 py-3 pr-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-[11px] font-semibold text-slate-200">{a.employeeName}</p>
-                            <p className="text-[9px] text-slate-500 truncate max-w-[140px] uppercase font-mono tracking-tighter">{a.projectName}</p>
-                          </div>
-                          {burnoutRisks.includes(a.employeeId) && (
-                            <div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_5px_rgba(244,63,94,0.5)] animate-pulse shrink-0 ml-2" title="Burnout Risk" />
-                          )}
-                        </div>
-                      </TableCell>
-                      {weekKeys.map(week => {
-                        const hours = a.weeklyAllocations.find(wa => wa.week === week)?.hours || 0;
-                        const intensity = Math.min(hours / 40, 1);
-                        
-                        // Use design specific colors
-                        let bgColor = 'transparent';
-                        let textColor = 'rgba(148, 163, 184, 0.4)'; // slate-400 low opacity
-
-                        if (hours > 0) {
-                          if (hours > 38) {
-                            bgColor = `rgba(244, 63, 94, ${0.4 + intensity * 0.4})`; // rose
-                            textColor = '#fff';
-                          } else if (hours < 10) {
-                            bgColor = `rgba(59, 130, 246, ${0.2 + intensity * 0.4})`; // blue/bench
-                            textColor = '#93c5fd';
-                          } else {
-                            bgColor = `rgba(16, 185, 129, ${0.1 + intensity * 0.7})`; // emerald
-                            textColor = hours > 20 ? '#a7f3d0' : '#d1fae5';
-                          }
-                        }
-
+            <div className="flex-1 border border-slate-800 bg-slate-900/10 overflow-hidden rounded-sm">
+              <ScrollArea className="h-full">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-slate-950/95 backdrop-blur z-10">
+                    <TableRow className="border-b border-slate-800 hover:bg-transparent">
+                      <TableHead className="w-[200px] font-mono text-[10px] uppercase border-r border-slate-800 text-slate-500 sticky left-0 bg-slate-950">Employee / Grade</TableHead>
+                      {heatmapWeeks.map(week => {
+                        const isCurrent = week === currentWeekKey;
                         return (
-                          <TableCell key={week} className="text-center p-0 align-middle border-r border-slate-800">
-                            <div 
-                              className="w-full h-full min-h-[44px] flex items-center justify-center font-mono text-[10px]"
-                              style={{ backgroundColor: bgColor, color: textColor }}
-                            >
-                              {hours > 0 ? hours.toFixed(1) : ''}
-                            </div>
-                          </TableCell>
+                          <TableHead key={week} className={`text-center font-mono text-[9px] min-w-[64px] border-r border-slate-800 ${isCurrent ? 'text-emerald-400' : 'text-slate-500'}`}>
+                            <div>{week.split(' ')[1] || week}</div>
+                            {isCurrent && <div className="text-[7px] text-emerald-600">â–¶ NOW</div>}
+                          </TableHead>
                         );
                       })}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          </div>
-          
-          {/* Key / Legend */}
-          <div className="mt-4 flex flex-wrap gap-6 text-[9px] font-mono opacity-50 uppercase tracking-widest shrink-0">
-            <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-emerald-500"></div> Billable</div>
-            <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-blue-500"></div> On Bench</div>
-            <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-rose-500"></div> Burnout / High Bias</div>
-            <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-slate-800 border border-slate-700"></div> Unallocated</div>
-          </div>
-        </section>
+                  </TableHeader>
+                  <TableBody>
+                    {employeeRows.map(emp => (
+                      <TableRow key={emp.id} className="border-b border-slate-800 hover:bg-slate-900/40">
+                        <TableCell className="border-r border-slate-800 py-2 sticky left-0 bg-slate-950">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-1.5 h-8 rounded-full shrink-0 ${emp.isBurnout ? 'bg-rose-500' : emp.isBench ? 'bg-blue-500' : 'bg-emerald-500/30'}`} />
+                            <div>
+                              <p className="text-[11px] font-semibold text-slate-200 leading-tight">{emp.name}</p>
+                              <p className="text-[8px] text-slate-600 font-mono truncate max-w-[150px]">{emp.grade?.split(':')[0]?.trim()}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        {emp.weekHours.map((wh, wi) => {
+                          const h = wh.forecast;
+                          const isPast = wi < (todayIdx - Math.max(0, todayIdx - 2));
+                          let bg = 'transparent', color = 'rgba(100,116,139,0.3)';
+                          if (h > 0) {
+                            if (h > 42) { bg = 'rgba(244,63,94,0.35)'; color = '#fda4af'; }
+                            else if (h < 8) { bg = 'rgba(59,130,246,0.2)'; color = '#93c5fd'; }
+                            else { const i = Math.min((h - 8) / 32, 1); bg = `rgba(16,185,129,${0.1 + i * 0.6})`; color = i > 0.5 ? '#a7f3d0' : '#d1fae5'; }
+                          }
+                          return (
+                            <TableCell key={wi} className="text-center p-0 border-r border-slate-800">
+                              <div className="w-full min-h-[42px] flex flex-col items-center justify-center font-mono text-[10px] gap-0.5" style={{ background: bg, color }}>
+                                {h > 0 && <span className="font-bold">{h.toFixed(0)}</span>}
+                                {wh.actual > 0 && <span className="text-[7px] opacity-60">â—†{wh.actual.toFixed(0)}</span>}
+                              </div>
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </div>
+          </TabsContent>
+
+          {/* â”€â”€ INTELLIGENCE TAB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          <TabsContent value="intelligence" className="flex-1 overflow-auto p-6 space-y-6 mt-0">
+            {/* Alert cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Burnout Risk */}
+              <div className="bg-slate-900 border border-rose-900/40 rounded-sm p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle size={14} className="text-rose-400" />
+                  <span className="text-[10px] font-mono text-rose-400 uppercase tracking-widest">Burnout Risk â€” {burnoutRiskEmployees.length} Employees</span>
+                </div>
+                {burnoutRiskEmployees.length === 0
+                  ? <p className="text-[11px] text-slate-600 font-mono">No burnout risk detected in upcoming weeks.</p>
+                  : <div className="space-y-1">
+                      {burnoutRiskEmployees.map(id => {
+                        const emp = employeeRows.find(e => e.id === id);
+                        return emp ? (
+                          <div key={id} className="flex items-center justify-between text-[10px] font-mono bg-rose-950/20 px-3 py-1.5 rounded">
+                            <span className="text-slate-300">{emp.name}</span>
+                            <span className="text-rose-400 text-[9px]">{emp.grade?.split(':')[0]?.trim()}</span>
+                          </div>
+                        ) : null;
+                      })}
+                    </div>}
+              </div>
+
+              {/* Bench Risk */}
+              <div className="bg-slate-900 border border-blue-900/40 rounded-sm p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock size={14} className="text-blue-400" />
+                  <span className="text-[10px] font-mono text-blue-400 uppercase tracking-widest">Bench Risk â€” {benchRiskEmployees.length} Employees</span>
+                </div>
+                {benchRiskEmployees.length === 0
+                  ? <p className="text-[11px] text-slate-600 font-mono">All staff have adequate allocation ahead.</p>
+                  : <div className="space-y-1">
+                      {benchRiskEmployees.map(id => {
+                        const emp = employeeRows.find(e => e.id === id);
+                        return emp ? (
+                          <div key={id} className="flex items-center justify-between text-[10px] font-mono bg-blue-950/20 px-3 py-1.5 rounded">
+                            <span className="text-slate-300">{emp.name}</span>
+                            <span className="text-blue-400 text-[9px]">{emp.discipline?.split(':')[1]?.trim() || emp.discipline}</span>
+                          </div>
+                        ) : null;
+                      })}
+                    </div>}
+              </div>
+            </div>
+
+            {/* PM Bias + Discipline */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* PM Accuracy */}
+              <div className="bg-slate-900 border border-slate-800 rounded-sm p-5">
+                <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-4">PM Forecast Accuracy (Actual Ã· Forecast)</div>
+                {pmBias.length === 0
+                  ? <p className="text-[11px] text-slate-600 font-mono">Not enough actuals data to compute PM bias.</p>
+                  : <div className="space-y-2">
+                      {pmBias.map(pm => {
+                        const pct_ = pm.coefficient * 100;
+                        const color = pct_ > 115 ? COLORS.burnout : pct_ < 85 ? COLORS.bench : COLORS.billable;
+                        const label = pct_ > 115 ? 'OVER-RUNNING' : pct_ < 85 ? 'UNDER-UTILISED' : 'ON TARGET';
+                        return (
+                          <div key={pm.pmName}>
+                            <div className="flex justify-between text-[10px] font-mono mb-1">
+                              <span className="text-slate-400 truncate max-w-[60%]">{pm.pmName}</span>
+                              <div className="flex items-center gap-2">
+                                <span style={{ color }} className="font-bold">{pct_.toFixed(0)}%</span>
+                                <span className="text-[8px] text-slate-600">{label}</span>
+                              </div>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${Math.min(pct_, 150) / 1.5}%`, background: color }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>}
+              </div>
+
+              {/* Discipline Utilization */}
+              <div className="bg-slate-900 border border-slate-800 rounded-sm p-5">
+                <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-4">Hours by Discipline (Forecast Total)</div>
+                {disciplineData.length > 0
+                  ? <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={disciplineData} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                        <XAxis type="number" tick={{ fontSize: 9, fill: '#64748b', fontFamily: 'monospace' }} />
+                        <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 8, fill: '#94a3b8', fontFamily: 'monospace' }} />
+                        <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', fontSize: '10px', fontFamily: 'monospace' }} formatter={(v: any) => `${fmt(v)}h`} />
+                        <Bar dataKey="hours" fill={COLORS.billable} radius={[0, 2, 2, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  : <div className="text-slate-600 text-xs font-mono flex items-center justify-center h-40">No discipline data</div>}
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       </main>
 
-      {/* Zone C: Strategic Chat Sidebar */}
-      <aside className="w-80 bg-slate-950 border-l border-slate-800 flex flex-col" id="strategic-chat">
+      {/* Strategic Architect Chat */}
+      <aside className="w-80 bg-slate-950 border-l border-slate-800 flex flex-col">
         <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
-          <span className="text-[10px] font-bold tracking-[0.2em] text-slate-400 uppercase">Strategic Architect</span>
+          <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Strategic Architect</span>
           <div className="flex gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           </div>
         </div>
-        
-        <ScrollArea className="flex-1 px-4 py-6">
-          <div className="space-y-6">
-            <div className="p-4 bg-slate-900/50 rounded-sm border border-slate-800 text-[11px] text-slate-400 font-mono">
-               <span className="text-emerald-500 font-bold">ARC-01:</span> Monitoring {assignments.length} allocations. {burnoutRisks.length} staffing anomalies detected. Target billability 85%.
+        <ScrollArea className="flex-1 px-4 py-4">
+          <div className="space-y-4">
+            <div className="p-3 bg-slate-900/50 rounded border border-slate-800 text-[11px] text-slate-400 font-mono">
+              <span className="text-emerald-500 font-bold">ARC-01:</span> Monitoring {headcount} employees Â· {assignments.length} allocations Â· {burnoutRiskEmployees.length} burnout alerts Â· {benchRiskEmployees.length} bench alerts. Billability target: 85%.
             </div>
-            
             <AnimatePresence>
               {chatMessages.map((msg, i) => (
-                <div 
-                  key={i}
-                  className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
-                >
+                <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                   {msg.role === 'ai' && (
-                    <div className="flex gap-2 items-center text-[8px] text-emerald-500 font-mono uppercase tracking-widest mb-2 ml-1">
-                      <BrainCircuit size={10}/> ARCHITECT_RESPONSE
+                    <div className="flex gap-1.5 items-center text-[8px] text-emerald-500 font-mono uppercase tracking-widest mb-1.5 ml-1">
+                      <BrainCircuit size={9} /> ARCHITECT_RESPONSE
                     </div>
                   )}
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`max-w-[90%] p-4 rounded-sm text-[11px] font-mono leading-relaxed border ${
-                      msg.role === 'user' 
-                        ? 'bg-slate-800/50 border-slate-700 text-slate-300' 
-                        : 'bg-slate-950 border-emerald-900/30 text-emerald-100 shadow-[0_0_15px_rgba(16,185,129,0.03)]'
-                    }`}
+                    className={`max-w-[92%] p-3 rounded text-[11px] font-mono leading-relaxed border ${msg.role === 'user' ? 'bg-slate-800/50 border-slate-700 text-slate-300' : 'bg-slate-950 border-emerald-900/30 text-emerald-100'}`}
                   >
                     {msg.text}
                   </motion.div>
                 </div>
               ))}
             </AnimatePresence>
-            
             {isThinking && (
               <div className="flex flex-col items-start">
-                <div className="flex gap-2 items-center text-[8px] text-emerald-500 font-mono uppercase tracking-widest mb-2 ml-1">
-                  <BrainCircuit size={10} className="animate-spin text-emerald-400"/> THINKING...
+                <div className="flex gap-1.5 items-center text-[8px] text-emerald-500 font-mono uppercase tracking-widest mb-1.5 ml-1">
+                  <BrainCircuit size={9} className="animate-spin" /> Analysing...
                 </div>
-                <div className="bg-slate-950/50 border border-slate-800 p-4 rounded-sm w-[90%] text-[10px] text-slate-500 italic font-mono">
-                  Vectorizing query... matching CV embeddings... analyzing predictive variance...
+                <div className="bg-slate-950/50 border border-slate-800 p-3 rounded text-[10px] text-slate-500 italic font-mono">
+                  Cross-referencing forecasts vs actuals...
                 </div>
               </div>
             )}
           </div>
         </ScrollArea>
-
-        <div className="p-4 border-t border-slate-800 bg-slate-900/20">
-          <div className="relative bg-slate-950 border border-slate-700 rounded-sm focus-within:border-emerald-500/50 transition-colors">
-            <textarea 
+        <div className="p-3 border-t border-slate-800 bg-slate-900/20">
+          <div className="bg-slate-950 border border-slate-700 rounded focus-within:border-emerald-500/50 transition-colors">
+            <textarea
               rows={2}
-              className="w-full bg-transparent px-3 py-3 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none resize-none font-mono" 
+              className="w-full bg-transparent px-3 py-2 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none resize-none font-mono"
               placeholder="Ask the architect..."
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
+              onChange={e => setInputText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
             />
-            <div className="absolute bottom-2 right-2 text-[8px] text-slate-700 font-mono uppercase tracking-widest group-focus-within:text-emerald-500/50">
-              CMD + ↵
-            </div>
           </div>
         </div>
       </aside>
