@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   BarChart3, Users, TrendingUp, AlertTriangle, BrainCircuit,
   Upload, FileText, Database, Activity, Target, Clock, Zap,
@@ -106,6 +106,11 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Chat scroll + streaming
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+  const fullAiTextRef = useRef('');
+  const [streamingIdx, setStreamingIdx] = useState<number | null>(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -297,6 +302,32 @@ export default function App() {
     }).sort((a, b) => a.name.localeCompare(b.name));
   }, [assignments, forecastRows, actualRows, heatmapWeeks, burnoutRiskEmployees, benchRiskEmployees]);
 
+  // Auto-scroll to bottom whenever messages or thinking state changes
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, isThinking]);
+
+  // Stream AI response character by character
+  useEffect(() => {
+    if (streamingIdx === null) return;
+    const full = fullAiTextRef.current;
+    if (streamingIdx >= full.length) {
+      setStreamingIdx(null);
+      return;
+    }
+    const charsPerTick = Math.max(1, Math.floor(full.length / 80)); // finish in ~80 ticks
+    const timer = setTimeout(() => {
+      const next = Math.min(streamingIdx + charsPerTick, full.length);
+      setChatMessages(prev => {
+        const msgs = [...prev];
+        msgs[msgs.length - 1] = { role: 'ai', text: full.slice(0, next) };
+        return msgs;
+      });
+      setStreamingIdx(next);
+    }, 16); // ~60fps
+    return () => clearTimeout(timer);
+  }, [streamingIdx]);
+
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
     const userMsg = inputText;
@@ -313,8 +344,11 @@ export default function App() {
       winProb: winProbability,
     };
     const response = await askStrategicArchitect(userMsg, context);
-    setChatMessages(prev => [...prev, { role: 'ai', text: response }]);
     setIsThinking(false);
+    // Seed an empty AI message then stream characters in
+    fullAiTextRef.current = response;
+    setChatMessages(prev => [...prev, { role: 'ai', text: '' }]);
+    setStreamingIdx(0);
   };
 
   // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -666,60 +700,106 @@ export default function App() {
       </main>
 
       {/* Strategic Architect Chat */}
-      <aside className="w-80 bg-slate-950 border-l border-slate-800 flex flex-col">
-        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
-          <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Strategic Architect</span>
-          <div className="flex gap-1.5">
+      <aside className="w-72 bg-slate-950 border-l border-slate-800 flex flex-col">
+        {/* Header */}
+        <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center bg-slate-900/60 shrink-0">
+          <div className="flex items-center gap-2">
+            <BrainCircuit size={13} className="text-emerald-500" />
+            <span className="text-[10px] font-bold tracking-widest text-slate-300 uppercase">Architect</span>
+          </div>
+          <div className="flex gap-1">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           </div>
         </div>
-        <ScrollArea className="flex-1 px-4 py-4">
-          <div className="space-y-4">
-            <div className="p-3 bg-slate-900/50 rounded border border-slate-800 text-[11px] text-slate-400 font-mono">
-              <span className="text-emerald-500 font-bold">ARC-01:</span> Monitoring {headcount} employees Â· {assignments.length} allocations Â· {burnoutRiskEmployees.length} burnout alerts Â· {benchRiskEmployees.length} bench alerts. Billability target: 85%.
+
+        {/* Messages — native div so we can imperatively scroll */}
+        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 scroll-smooth">
+            {/* System status pill */}
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 rounded-full bg-emerald-900/50 flex items-center justify-center shrink-0 mt-0.5">
+                <BrainCircuit size={10} className="text-emerald-400" />
+              </div>
+              <div className="bg-slate-900 border border-slate-800 rounded-lg rounded-tl-none px-3 py-2 text-[11px] text-slate-400 leading-relaxed">
+                Monitoring <span className="text-emerald-400 font-semibold">{headcount}</span> staff ·{' '}
+                <span className="text-emerald-400 font-semibold">{assignments.length}</span> allocations ·{' '}
+                <span className={burnoutRiskEmployees.length > 0 ? 'text-rose-400 font-semibold' : 'text-slate-400'}>{burnoutRiskEmployees.length} burnout</span> ·{' '}
+                <span className={benchRiskEmployees.length > 0 ? 'text-blue-400 font-semibold' : 'text-slate-400'}>{benchRiskEmployees.length} bench</span>
+              </div>
             </div>
+
             <AnimatePresence>
               {chatMessages.map((msg, i) => (
-                <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  {msg.role === 'ai' && (
-                    <div className="flex gap-1.5 items-center text-[8px] text-emerald-500 font-mono uppercase tracking-widest mb-1.5 ml-1">
-                      <BrainCircuit size={9} /> ARCHITECT_RESPONSE
-                    </div>
-                  )}
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`max-w-[92%] p-3 rounded text-[11px] font-mono leading-relaxed border ${msg.role === 'user' ? 'bg-slate-800/50 border-slate-700 text-slate-300' : 'bg-slate-950 border-emerald-900/30 text-emerald-100'}`}
-                  >
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className={`flex items-start gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+                >
+                  {/* Avatar */}
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${msg.role === 'user' ? 'bg-slate-700' : 'bg-emerald-900/50'}`}>
+                    {msg.role === 'user'
+                      ? <span className="text-[8px] text-slate-300 font-bold">ME</span>
+                      : <BrainCircuit size={10} className="text-emerald-400" />}
+                  </div>
+                  {/* Bubble */}
+                  <div className={`max-w-[85%] px-3 py-2 rounded-lg text-[12px] leading-relaxed ${
+                    msg.role === 'user'
+                      ? 'bg-slate-800 text-slate-200 rounded-tr-none'
+                      : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
+                  }`}>
                     {msg.text}
-                  </motion.div>
-                </div>
+                    {/* blinking cursor while streaming this bubble */}
+                    {msg.role === 'ai' && streamingIdx !== null && i === chatMessages.length - 1 && (
+                      <span className="inline-block w-0.5 h-3 bg-emerald-400 ml-0.5 align-middle animate-pulse" />
+                    )}
+                  </div>
+                </motion.div>
               ))}
             </AnimatePresence>
+
             {isThinking && (
-              <div className="flex flex-col items-start">
-                <div className="flex gap-1.5 items-center text-[8px] text-emerald-500 font-mono uppercase tracking-widest mb-1.5 ml-1">
-                  <BrainCircuit size={9} className="animate-spin" /> Analysing...
+              <div className="flex items-start gap-2">
+                <div className="w-5 h-5 rounded-full bg-emerald-900/50 flex items-center justify-center shrink-0 mt-0.5">
+                  <BrainCircuit size={10} className="text-emerald-400 animate-spin" />
                 </div>
-                <div className="bg-slate-950/50 border border-slate-800 p-3 rounded text-[10px] text-slate-500 italic font-mono">
-                  Cross-referencing forecasts vs actuals...
+                <div className="bg-slate-900 border border-slate-800 rounded-lg rounded-tl-none px-3 py-2">
+                  <div className="flex gap-1 items-center">
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
                 </div>
               </div>
             )}
-          </div>
-        </ScrollArea>
-        <div className="p-3 border-t border-slate-800 bg-slate-900/20">
-          <div className="bg-slate-950 border border-slate-700 rounded focus-within:border-emerald-500/50 transition-colors">
+
+            {/* Scroll anchor */}
+            <div ref={chatBottomRef} />
+        </div>
+
+        {/* Input */}
+        <div className="p-3 border-t border-slate-800 shrink-0">
+          <div className="flex gap-2 items-end">
             <textarea
               rows={2}
-              className="w-full bg-transparent px-3 py-2 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none resize-none font-mono"
-              placeholder="Ask the architect..."
+              className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-[12px] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/60 resize-none transition-colors"
+              placeholder="Ask a question..."
               value={inputText}
               onChange={e => setInputText(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
             />
+            <button
+              onClick={handleSendMessage}
+              disabled={!inputText.trim() || isThinking}
+              className="h-[52px] w-9 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-lg flex items-center justify-center transition-colors shrink-0"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+            </button>
           </div>
+          <p className="text-[9px] text-slate-700 font-mono mt-1.5 text-right">Enter to send · Shift+Enter for newline</p>
         </div>
       </aside>
     </div>
