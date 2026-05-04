@@ -28,7 +28,7 @@ export default async function handler(_req: any, res: any) {
         a.update_type,
         a.total_hours,
         a.created_at,
-        e.employee_name as employee_name,
+        e.employee_name,
         e.grade,
         e.discipline,
         e.office,
@@ -36,18 +36,20 @@ export default async function handler(_req: any, res: any) {
           json_agg(
             json_build_object('id', w.id, 'week', w.week, 'hours', w.hours)
           ) FILTER (WHERE w.id IS NOT NULL),
-          '[]'
+          '[]'::json
         ) as weekly_allocations
       FROM assignments a
       LEFT JOIN employees e ON e.id = a.employee_id
       LEFT JOIN weekly_allocations w ON w.assignment_id = a.id
-      GROUP BY a.id, e.name, e.grade, e.discipline, e.office
+      GROUP BY a.id, e.employee_name, e.grade, e.discipline, e.office
       ORDER BY a.id
     `;
 
+    console.info(`[assignments] returning ${allAssignments.length} rows`);
+
     json(res, 200, { data: allAssignments });
   } catch (error) {
-    console.error(error);
-    json(res, 500, { error: "Database query failed" });
+    console.error("[assignments] query failed:", error instanceof Error ? error.message : String(error));
+    json(res, 500, { error: error instanceof Error ? error.message : "Database query failed" });
   }
 }
