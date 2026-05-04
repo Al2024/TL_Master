@@ -22,7 +22,7 @@ import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { fetchAssignments, calculateBiasModels, getAdjustedForecast, uploadForecast, uploadCV } from '@/src/services/dataService';
+import { fetchAssignments, fetchBatches, calculateBiasModels, getAdjustedForecast, uploadForecast, uploadCV } from '@/src/services/dataService';
 import { askStrategicArchitect } from '@/src/services/geminiService';
 import { Assignment, ProjectType, UpdateType, BiasModel } from '@/src/types';
 
@@ -98,6 +98,8 @@ function ChartTooltip({ active, payload, label }: any) {
 export default function App() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [batches, setBatches] = useState<{ id: number; label: string; filename: string; uploaded_at: string; row_count: number }[]>([]);
+  const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   const [winProbability, setWinProbability] = useState(100);
   const [isAdjusted, setIsAdjusted] = useState(false);
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
@@ -112,10 +114,18 @@ export default function App() {
   const fullAiTextRef = useRef('');
   const [streamingIdx, setStreamingIdx] = useState<number | null>(null);
 
-  const loadData = async () => {
+  const loadData = async (batchId?: number | null) => {
     setIsLoading(true);
-    const data = await fetchAssignments();
+    const [data, batchList] = await Promise.all([
+      fetchAssignments(batchId),
+      fetchBatches(),
+    ]);
     setAssignments(data);
+    setBatches(batchList);
+    // If no batch was explicitly chosen, snap to latest
+    if (batchId === undefined && batchList.length > 0) {
+      setSelectedBatchId(batchList[0].id);
+    }
     setIsLoading(false);
   };
 
@@ -126,9 +136,11 @@ export default function App() {
     setIsUploading(true);
     setUploadMessage('Uploading forecast...');
     try {
-      await uploadForecast(e.target.files[0]);
-      await loadData();
-      setUploadMessage('Forecast data ingested successfully.');
+      const result = await uploadForecast(e.target.files[0]);
+      const newBatchId = result?.batchId ?? null;
+      if (newBatchId) setSelectedBatchId(newBatchId);
+      await loadData(newBatchId);
+      setUploadMessage(`Ingested successfully — ${result?.label ?? 'new batch'}`);
     } catch (err) {
       setUploadMessage(err instanceof Error ? err.message : 'Upload failed.');
     } finally { setIsUploading(false); }
@@ -375,6 +387,27 @@ export default function App() {
             </h1>
           </div>
           <div className="flex items-center gap-6 text-[10px] font-mono">
+            {/* Batch selector */}
+            {batches.length > 0 && (
+              <div className="flex flex-col items-end gap-0.5">
+                <span className="text-slate-500 uppercase text-[9px]">Data Snapshot</span>
+                <select
+                  value={selectedBatchId ?? ''}
+                  onChange={e => {
+                    const id = Number(e.target.value);
+                    setSelectedBatchId(id);
+                    loadData(id);
+                  }}
+                  className="bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-mono rounded px-2 py-0.5 focus:outline-none focus:border-emerald-500/60 cursor-pointer max-w-[200px] truncate"
+                >
+                  {batches.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {new Date(b.uploaded_at).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })} · {b.row_count} rows
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="flex flex-col items-end">
               <span className="text-slate-500 uppercase">System Status</span>
               <span className={`font-bold ${isLoading ? 'text-amber-400' : 'text-emerald-400'}`}>

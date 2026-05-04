@@ -17,6 +17,21 @@ export default async function handler(_req: any, res: any) {
     await ensureSchema();
     const sql = getSql();
 
+    // Resolve which batch to use: ?batch_id=N or latest
+    const queryBatchId = _req.query?.batch_id ? parseInt(_req.query.batch_id) : null;
+    let batchId: number | null = queryBatchId;
+
+    if (!batchId) {
+      const [latest] = await sql`SELECT id FROM upload_batches ORDER BY uploaded_at DESC LIMIT 1`;
+      batchId = latest?.id ?? null;
+    }
+
+    // If no batches exist at all, return empty
+    if (!batchId) {
+      json(res, 200, { data: [], batchId: null });
+      return;
+    }
+
     const allAssignments = await sql`
       SELECT
         a.id,
@@ -28,6 +43,7 @@ export default async function handler(_req: any, res: any) {
         a.update_type,
         a.total_hours,
         a.created_at,
+        a.batch_id,
         e.employee_name,
         e.grade,
         e.discipline,
@@ -41,13 +57,14 @@ export default async function handler(_req: any, res: any) {
       FROM assignments a
       LEFT JOIN employees e ON e.id = a.employee_id
       LEFT JOIN weekly_allocations w ON w.assignment_id = a.id
+      WHERE a.batch_id = ${batchId}
       GROUP BY a.id, e.employee_name, e.grade, e.discipline, e.office
       ORDER BY a.id
     `;
 
-    console.info(`[assignments] returning ${allAssignments.length} rows`);
+    console.info(`[assignments] batch=${batchId} returning ${allAssignments.length} rows`);
 
-    json(res, 200, { data: allAssignments });
+    json(res, 200, { data: allAssignments, batchId });
   } catch (error) {
     console.error("[assignments] query failed:", error instanceof Error ? error.message : String(error));
     json(res, 500, { error: error instanceof Error ? error.message : "Database query failed" });

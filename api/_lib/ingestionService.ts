@@ -17,7 +17,7 @@ function normalizeProjectType(raw: string | undefined): string {
   return "B";
 }
 
-export async function ingestCSV(buffer: Buffer) {
+export async function ingestCSV(buffer: Buffer, batchId: number) {
   await ensureSchema();
   const sql = getSql();
   const records = parse(buffer, {
@@ -69,7 +69,7 @@ export async function ingestCSV(buffer: Buffer) {
       const totalHours = parseFloat(record["Overall Total Project Hours"]?.replace(/,/g, "") || "0");
 
       const [newAssignment] = await sql`
-        INSERT INTO assignments (employee_id, project_number, project_name, project_type, project_manager, update_type, total_hours)
+        INSERT INTO assignments (employee_id, project_number, project_name, project_type, project_manager, update_type, total_hours, batch_id)
         VALUES (
           ${id},
           ${record["ProjectNumber"] || null},
@@ -77,7 +77,8 @@ export async function ingestCSV(buffer: Buffer) {
           ${projectType},
           ${record["Project Manager"] || null},
           ${updateType},
-          ${isNaN(totalHours) ? 0 : totalHours}
+          ${isNaN(totalHours) ? 0 : totalHours},
+          ${batchId}
         )
         RETURNING id
       `;
@@ -109,6 +110,9 @@ export async function ingestCSV(buffer: Buffer) {
   }
 
   console.info(`[ingestCSV] Done: inserted=${inserted} skipped=${skipped} failed=${failed}`);
+
+  // Update batch row count
+  await sql`UPDATE upload_batches SET row_count = ${inserted} WHERE id = ${batchId}`;
 }
 
 export async function ingestCV(buffer: Buffer, originalname: string, employeeId: string) {

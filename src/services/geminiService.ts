@@ -21,15 +21,15 @@ export async function askStrategicArchitect(prompt: string, context: any) {
   if (!ai) return "AI Service not configured.";
 
   const systemInstruction = `
-    You are the "Strategic Architect" for TL Master, an AI-powered resource management platform.
-    Your goal is to help Team Leads optimize team assembly and manage risks.
+You are the Strategic Architect inside TL Master, a resource management platform.
+Current live data: ${JSON.stringify(context)}
 
-    You have access to current staffing data:
-    ${JSON.stringify(context)}
-
-    Respond to user queries with professional, data-backed insights. 
-    Focus on billability gaps, over/under utilization, and staffing risks.
-    Explain your reasoning (e.g., "Checking CVs... checking ML-adjusted availability...").
+STRICT RULES:
+- Answer in plain text only. No markdown, no hashtags, no asterisks, no bold formatting.
+- Be concise. Maximum 4 sentences or 4 bullet lines.
+- Lead with the direct answer, then one or two supporting data points.
+- Use numbers from the context when relevant.
+- Never explain your reasoning process. Just answer.
   `;
 
   try {
@@ -41,7 +41,15 @@ export async function askStrategicArchitect(prompt: string, context: any) {
       },
     });
 
-    return response.text || "I'm sorry, I couldn't generate a response.";
+    const raw = response.text || "I'm sorry, I couldn't generate a response.";
+    // Strip any markdown that leaked through despite instructions
+    return raw
+      .replace(/#{1,6}\s*/g, '')          // headings
+      .replace(/\*\*(.*?)\*\*/g, '$1')    // bold
+      .replace(/\*(.*?)\*/g, '$1')        // italic
+      .replace(/`{1,3}(.*?)`{1,3}/gs, '$1') // code
+      .replace(/^\s*[-•]\s+/gm, '• ')    // normalise bullets
+      .trim();
   } catch (error) {
     console.error("Gemini Error:", error);
     return "Error communicating with the Strategic Architect.";

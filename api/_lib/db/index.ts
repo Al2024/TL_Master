@@ -74,6 +74,17 @@ export async function ensureSchema() {
     );
   `;
 
+  // Upload batches — tracks each CSV ingest
+  await sqlClient`
+    CREATE TABLE IF NOT EXISTS upload_batches (
+      id serial PRIMARY KEY,
+      label text,
+      filename text,
+      uploaded_at timestamp DEFAULT now(),
+      row_count integer DEFAULT 0
+    );
+  `;
+
   await sqlClient`
     CREATE TABLE IF NOT EXISTS skill_vectors (
       id serial PRIMARY KEY,
@@ -97,6 +108,7 @@ export async function ensureSchema() {
   await sqlClient`ALTER TABLE assignments ADD COLUMN IF NOT EXISTS update_type varchar(50)`;
   await sqlClient`ALTER TABLE assignments ADD COLUMN IF NOT EXISTS total_hours double precision`;
   await sqlClient`ALTER TABLE assignments ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()`;
+  await sqlClient`ALTER TABLE assignments ADD COLUMN IF NOT EXISTS batch_id integer REFERENCES upload_batches(id)`;
 
   schemaInitialized = true;
 }

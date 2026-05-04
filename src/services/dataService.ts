@@ -45,9 +45,20 @@ export async function uploadCV(file: File, employeeId: string): Promise<any> {
 }
 
 // Simplified parser for the provided CSV snapshot in the prompt
-export async function fetchAssignments(): Promise<Assignment[]> {
+export async function fetchBatches(): Promise<{ id: number; label: string; filename: string; uploaded_at: string; row_count: number }[]> {
   try {
-    const response = await fetch('/api/assignments');
+    const response = await fetch('/api/batches');
+    const result = await response.json();
+    return result.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchAssignments(batchId?: number | null): Promise<Assignment[]> {
+  try {
+    const url = batchId ? `/api/assignments?batch_id=${batchId}` : '/api/assignments';
+    const response = await fetch(url);
     const result = await response.json();
     
     if (result.data && result.data.length > 0) {

@@ -1,4 +1,5 @@
 import { ingestCSV } from "../_lib/ingestionService.js";
+import { ensureSchema, getSql } from "../_lib/db/index.js";
 import { parseMultipart } from "../_multipart.js";
 
 export const config = {
@@ -44,8 +45,18 @@ export default async function handler(req: any, res: any) {
       size: file.buffer?.length,
     });
 
-    await ingestCSV(file.buffer);
-    json(res, 200, { success: true, message: "Forecast data ingested successfully" });
+    await ensureSchema();
+    const sql = getSql();
+    const filename = file.originalFilename || 'forecast.csv';
+    const label = `${filename} — ${new Date().toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' })}`;
+
+    // Create batch record before ingestion
+    const [batch] = await sql`
+      INSERT INTO upload_batches (label, filename) VALUES (${label}, ${filename}) RETURNING id
+    `;
+
+    await ingestCSV(file.buffer, batch.id);
+    json(res, 200, { success: true, message: "Forecast data ingested successfully", batchId: batch.id, label });
   } catch (error) {
     console.error(error);
     json(res, 500, {
