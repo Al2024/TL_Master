@@ -18,7 +18,9 @@ export async function uploadForecast(file: File): Promise<any> {
     method: 'POST',
     body: formData,
   });
-  const payload = await response.json();
+  const text = await response.text();
+  let payload: any;
+  try { payload = JSON.parse(text); } catch { payload = { error: text || `HTTP ${response.status}` }; }
   if (!response.ok) {
     throw new Error(payload?.error || 'Forecast upload failed');
   }
@@ -33,7 +35,9 @@ export async function uploadCV(file: File, employeeId: string): Promise<any> {
     method: 'POST',
     body: formData,
   });
-  const payload = await response.json();
+  const text = await response.text();
+  let payload: any;
+  try { payload = JSON.parse(text); } catch { payload = { error: text || `HTTP ${response.status}` }; }
   if (!response.ok) {
     throw new Error(payload?.error || 'CV upload failed');
   }
