@@ -44,20 +44,22 @@ export async function ingestCSV(buffer: Buffer) {
     }
 
     try {
-      // Raw SQL insert — immune to Drizzle column resolution issues
+      // Raw SQL insert using the exact live Neon column names
       await sql`
-        INSERT INTO employees (id, name, employee_number, grade, discipline, office, normal_weekly_hours)
+        INSERT INTO employees (id, employee_number, employee_name, name, grade, discipline, office, normal_weekly_hours)
         VALUES (
           ${id},
-          ${name},
           ${id},
+          ${name},
+          ${name},
           ${record["Employee Grade"] || null},
           ${record["Discipline"] || null},
           ${record["Office"] || null},
           40
         )
         ON CONFLICT (id) DO UPDATE
-          SET name = EXCLUDED.name,
+          SET employee_name = EXCLUDED.employee_name,
+              name = EXCLUDED.name,
               grade = EXCLUDED.grade
       `;
 

@@ -28,7 +28,7 @@ export default async function handler(_req: any, res: any) {
         a.update_type,
         a.total_hours,
         a.created_at,
-        e.name as employee_name,
+        e.employee_name as employee_name,
         e.grade,
         e.discipline,
         e.office,
