@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Assignment, BiasModel, UpdateType } from '../types';
+import { Assignment, BiasModel, UpdateType, ProjectType } from '../types';
 
 // Helper to extract data from the provide CSV structure
 // Since we are in a demo environment, I will use the provided data as a hardcoded source
@@ -51,10 +51,27 @@ export async function fetchAssignments(): Promise<Assignment[]> {
     const result = await response.json();
     
     if (result.data && result.data.length > 0) {
-      return result.data;
+      // Map snake_case DB columns to camelCase Assignment type
+      return result.data.map((row: any): Assignment => ({
+        id: String(row.id),
+        employeeId: row.employee_id ?? row.employeeId ?? '',
+        employeeName: row.employee_name ?? row.employeeName ?? '',
+        projectNumber: row.project_number ?? row.projectNumber ?? '',
+        projectName: row.project_name ?? row.projectName ?? '',
+        projectType: (row.project_type ?? row.projectType ?? 'B') as ProjectType,
+        projectManager: row.project_manager ?? row.projectManager ?? '',
+        updateType: (row.update_type ?? row.updateType ?? 'forecast') as UpdateType,
+        discipline: row.discipline ?? '',
+        grade: row.grade ?? '',
+        totalHours: Number(row.total_hours ?? row.totalHours ?? 0),
+        weeklyAllocations: (row.weekly_allocations ?? row.weeklyAllocations ?? []).map((w: any) => ({
+          week: w.week ?? '',
+          hours: Number(w.hours ?? 0),
+        })),
+      }));
     }
   } catch (error) {
-    console.warn("API fetch failed, falling back to mock data", error);
+    console.warn("API fetch failed", error);
   }
 
   return [];
