@@ -46,10 +46,11 @@ export async function ingestCSV(buffer: Buffer) {
     try {
       // Raw SQL insert — immune to Drizzle column resolution issues
       await sql`
-        INSERT INTO employees (id, name, grade, discipline, office, normal_weekly_hours)
+        INSERT INTO employees (id, name, employee_number, grade, discipline, office, normal_weekly_hours)
         VALUES (
           ${id},
           ${name},
+          ${id},
           ${record["Employee Grade"] || null},
           ${record["Discipline"] || null},
           ${record["Office"] || null},

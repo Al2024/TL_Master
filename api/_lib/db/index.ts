@@ -85,6 +85,7 @@ export async function ensureSchema() {
 
   // Migration: add any columns that may be missing from older table versions
   await sqlClient`ALTER TABLE employees ADD COLUMN IF NOT EXISTS name text NOT NULL DEFAULT ''`;
+  await sqlClient`ALTER TABLE employees ADD COLUMN IF NOT EXISTS employee_number varchar(255) DEFAULT ''`;
   await sqlClient`ALTER TABLE employees ADD COLUMN IF NOT EXISTS grade varchar(50)`;
   await sqlClient`ALTER TABLE employees ADD COLUMN IF NOT EXISTS discipline text`;
   await sqlClient`ALTER TABLE employees ADD COLUMN IF NOT EXISTS office text`;
