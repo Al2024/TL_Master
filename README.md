@@ -1,5 +1,16 @@
 <div align="center">
-<img width="1200" height="475" alt="TL Master Banner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+  <br/>
+  <h1>⬛ TL MASTER</h1>
+  <p><strong>Intelligence Edition &nbsp;·&nbsp; v1.0.0</strong></p>
+  <p><em>Resource management and workforce intelligence for technical leads</em></p>
+  <br/>
+  <img src="https://img.shields.io/badge/version-1.0.0-10b981?style=for-the-badge&labelColor=0f172a" alt="version" />
+  <img src="https://img.shields.io/badge/React-19-38bdf8?style=for-the-badge&logo=react&logoColor=38bdf8&labelColor=0f172a" alt="React 19" />
+  <img src="https://img.shields.io/badge/Neon-Postgres-3ECF8E?style=for-the-badge&logo=postgresql&logoColor=3ECF8E&labelColor=0f172a" alt="Neon Postgres" />
+  <img src="https://img.shields.io/badge/Gemini-AI-4285F4?style=for-the-badge&logo=google&logoColor=4285F4&labelColor=0f172a" alt="Gemini AI" />
+  <img src="https://img.shields.io/badge/Azure-SWA-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=0078D4&labelColor=0f172a" alt="Azure Static Web Apps" />
+  <img src="https://img.shields.io/badge/Vercel-Deployed-ffffff?style=for-the-badge&logo=vercel&logoColor=ffffff&labelColor=0f172a" alt="Vercel" />
+  <br/><br/>
 </div>
 
 # TL Master — Intelligence Edition
