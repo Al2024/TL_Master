@@ -346,6 +346,31 @@ export default function App() {
     setInputText('');
     setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setIsThinking(true);
+    // Build a compact per-employee summary so the AI can answer individual questions
+    const employeeSummaries = employeeRows.map(emp => {
+      const empForecasts = forecastRows.filter(a => a.employeeId === emp.id);
+      const totalHrs = empForecasts.reduce((s, a) => s + a.totalHours, 0);
+      const billableHrs = empForecasts
+        .filter(a => a.projectType === ProjectType.BILLABLE)
+        .reduce((s, a) => s + a.totalHours, 0);
+      const projects = empForecasts.map(a => ({
+        project: a.projectName || a.projectNumber,
+        type: a.projectType,
+        pm: a.projectManager,
+        hours: a.totalHours,
+      }));
+      return {
+        name: emp.name,
+        grade: emp.grade,
+        discipline: emp.discipline,
+        burnoutRisk: emp.isBurnout,
+        benchRisk: emp.isBench,
+        totalForecastHours: totalHrs,
+        billabilityPct: totalHrs > 0 ? Math.round((billableHrs / totalHrs) * 100) : 0,
+        projects,
+      };
+    });
+
     const context = {
       billability: billabilityPct,
       tasks: assignments.length,
@@ -354,6 +379,7 @@ export default function App() {
       bench: benchRiskEmployees.length,
       forecastAccuracy: avgAccuracy,
       winProb: winProbability,
+      employees: employeeSummaries,
     };
     const response = await askStrategicArchitect(userMsg, context);
     setIsThinking(false);
