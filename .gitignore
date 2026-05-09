@@ -9,3 +9,6 @@ coverage/
 
 .vercel
 .env*.local
+api/local.settings.json
+api/dist/
+api/node_modules/
